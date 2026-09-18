@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Machine</title>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --sidebar: #10131a;
+    --panel: #151922;
+    --panel-2: #1b202b;
+    --line: #262c38;
+    --line-strong: #323a4a;
+    --text: #eceef3;
+    --muted: #8b93a6;
+    --accent: #3d8bfd;
+    --accent-soft: rgba(61, 139, 253, 0.14);
+    --ok: #3ecf8e;
+    --warn: #e8a317;
+    --err: #f07178;
+    --radius: 8px;
+    --sidebar-w: 292px;
+    --header-h: 52px;
+    --agent-width: 46%;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--text);
+    font: 13.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 11px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06101f; font-weight: 600; }
+  button.danger { color: var(--err); }
+  button.ghost { background: transparent; }
+  button.icon-btn { padding: 5px 8px; color: var(--muted); }
+  button.icon-btn.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+
+  .app-header {
+    height: var(--header-h); flex: none; display: flex; align-items: center; gap: 16px;
+    padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--sidebar);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+  .mark {
+    width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center;
+    background: var(--accent); color: #06101f; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  }
+  .brand-name { font-size: 13px; font-weight: 650; letter-spacing: .01em; }
+  .brand-sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+  .header-status { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .health { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .health span { display: flex; align-items: center; gap: 6px; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .led.up { background: var(--ok); } .led.down { background: var(--err); }
+
+  .app-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+
+  .sidebar {
+    background: var(--sidebar); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .sidebar-top { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .new-btn { width: 100%; }
+  .nav-search {
+    width: 100%; padding: 7px 10px; border-radius: 7px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit;
+  }
+  .nav-search:focus { outline: none; border-color: var(--accent); }
+  .nav-block { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); }
+  .conversations-block { flex: 1 1 auto; min-height: 160px; }
+  .nav-block.compact { flex: 0 0 auto; max-height: 28%; min-height: 92px; }
+  .nav-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 6px; font-size: 10.5px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .nav-head button { margin-left: auto; padding: 2px 8px; font-size: 11px; text-transform: none; letter-spacing: 0; }
+  .nav-scroll { flex: 1; overflow-y: auto; padding: 0 8px 10px; }
+  .nav-group { margin-bottom: 8px; }
+  .nav-group-label {
+    padding: 6px 8px 4px; font-size: 10px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .nav-item {
+    width: 100%; text-align: left; display: flex; gap: 8px; align-items: flex-start;
+    background: none; border: 0; border-radius: 8px; padding: 8px 8px;
+  }
+  .nav-item:hover { background: var(--panel); border-color: transparent; }
+  .nav-item.active { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .nav-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .nav-item-title { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-item-meta { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-item .run {
+    flex: none; padding: 2px 7px; font-size: 10.5px; opacity: 0;
+  }
+  .nav-item:hover .run, .nav-item:focus-within .run { opacity: 1; }
+
+  .workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view[hidden] { display: none !important; }
+
+  .workspace-bar {
+    flex: none; display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .workspace-bar > div:first-child { min-width: 0; flex: 1; overflow: hidden; }
+  .workspace-kicker { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .workspace-bar h2 {
+    margin: 0; font-size: 14px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .workspace-bar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    border: 0; border-radius: 0; padding: 5px 10px; font-size: 12px; color: var(--muted); background: transparent;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button:hover:not(:disabled) { border-color: transparent; color: var(--text); }
+  .seg button.active { color: var(--text); background: var(--accent-soft); }
+
+  .workspace-body {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: minmax(280px, 1fr) var(--agent-width);
+  }
+  .workspace-body.agent-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .workspace-body.agent-collapsed .agent-pane { display: none; }
+  .workspace-body.agent-expanded { --agent-width: 66%; }
+
+  .chat-pane, .agent-pane, .editor-pane {
+    display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  }
+  .agent-pane { border-left: 1px solid var(--line); position: relative; background: var(--bg); }
+  .resizer {
+    position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3;
+  }
+  .resizer:hover, .workspace-body.resizing .resizer { background: var(--accent); }
+
+  .head {
+    padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .scroll { flex: 1; overflow-y: auto; padding: 14px; }
+
+  .msg { margin-bottom: 12px; display: flex; }
+  .msg .bubble {
+    padding: 9px 12px; border-radius: 12px; max-width: 88%; white-space: pre-wrap;
+    word-wrap: break-word; background: var(--panel-2); border: 1px solid var(--line);
+  }
+  .msg.user { justify-content: flex-end; }
+  .msg.user .bubble { background: var(--accent); color: #06101f; border-color: var(--accent); }
+  .msg.typing-row .bubble { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .typing-emoji { font-size: 16px; line-height: 1; }
+  .typing-dots { display: inline-flex; gap: 3px; align-items: center; height: 10px; }
+  .typing-dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+    animation: typing-dot 1.2s infinite ease-in-out;
+  }
+  .typing-dots i:nth-child(2) { animation-delay: .15s; }
+  .typing-dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes typing-dot {
+    0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+  .typing-label { font-size: 12px; color: var(--muted); }
+  .typing-tool {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px; color: var(--accent);
+  }
+  .composer { border-top: 1px solid var(--line); padding: 12px; background: var(--panel); }
+  .composer textarea {
+    width: 100%; resize: none; height: 72px; padding: 9px 11px; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font: inherit;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .composer .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .composer .hint { flex: 1; font-size: 11px; color: var(--muted); }
+
+  .step {
+    border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+    padding: 10px 12px; margin-bottom: 10px;
+  }
+  .step-head { display: flex; align-items: center; gap: 8px; }
+  .seq {
+    min-width: 21px; height: 21px; border-radius: 5px; background: var(--panel-2);
+    color: var(--muted); font-size: 11px; display: grid; place-items: center;
+  }
+  .tool { font-weight: 600; color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12.5px; }
+  .args { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, monospace;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .result { margin-top: 7px; color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
+  .step img { margin-top: 9px; max-width: 100%; border-radius: 6px; border: 1px solid var(--line); display: block; }
+  .approval { border-color: var(--warn); background: #241d0e; }
+  .approval .title { color: var(--warn); font-weight: 600; }
+  .approval .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .note { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+  .note.err { color: var(--err); }
+
+  .plan { border-bottom: 1px solid var(--line); padding: 10px 14px; background: var(--panel); }
+  .plan ol { margin: 6px 0 0; padding-left: 20px; }
+  .plan li { font-size: 12.5px; margin-bottom: 3px; color: var(--muted); }
+  .plan li.in_progress { color: var(--accent); font-weight: 600; }
+  .plan li.completed { color: var(--ok); text-decoration: line-through; opacity: .75; }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--muted); }
+  .dot.running { background: var(--accent); animation: pulse 1.2s infinite; }
+  .dot.done { background: var(--ok); } .dot.error { background: var(--err); }
+  .dot.awaiting_approval, .dot.paused { background: var(--warn); }
+  .dot.cancelled { background: var(--muted); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 10px 8px; }
+
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.running { color: var(--accent); border-color: var(--accent); }
+  .pill.done { color: var(--ok); border-color: var(--ok); }
+  .pill.error { color: var(--err); border-color: var(--err); }
+  .pill.awaiting_approval, .pill.paused { color: var(--warn); border-color: var(--warn); }
+
+  .browser-shell {
+    flex: 1 1 58%; min-height: 180px; background: #090b0f;
+    border-bottom: 1px solid var(--line); position: relative; display: grid; place-items: center;
+  }
+  .browser-shell iframe { width: 100%; height: 100%; border: 0; background: #090b0f; }
+  .browser-empty { color: var(--muted); text-align: center; padding: 24px; }
+  .browser-controls { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .intervention {
+    padding: 7px 12px; color: var(--warn); background: #241d0e;
+    border-bottom: 1px solid var(--warn); font-size: 12px; display: none;
+  }
+  .activity-head { border-top: 0; }
+  #timeline { flex: 0 1 36%; min-height: 88px; max-height: 44%; }
+  .agent-pane.activity-collapsed #plan,
+  .agent-pane.activity-collapsed #timeline { display: none; }
+  .agent-pane.activity-collapsed .browser-shell { flex: 1 1 auto; max-height: none; border-bottom: 0; }
+  .response-box {
+    width: 100%; min-height: 64px; margin-top: 10px; padding: 8px;
+    color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; resize: vertical;
+  }
+
+  .card {
+    border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+    padding: 11px 12px; margin-bottom: 10px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .card p { margin: 0 0 8px; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+  .card .meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 8px 10px; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font: inherit;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .field textarea { height: 220px; resize: vertical; }
+  .field.row { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .field.row label { text-transform: none; letter-spacing: 0; color: var(--text); font-size: 13px; }
+  .form-error { color: var(--err); font-size: 12px; margin-bottom: 8px; }
+  .editor-pane { padding: 20px 24px; overflow-y: auto; max-width: 760px; }
+  .editor-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+
+  .chat-empty {
+    height: 100%; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 32px;
+  }
+  .chat-empty h3 { margin: 0 0 6px; color: var(--text); font-size: 16px; font-weight: 600; }
+  .chat-empty p { margin: 0; max-width: 360px; font-size: 13px; }
+
+  @media (max-width: 900px) {
+    .workspace-body, .workspace-body.agent-expanded {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(240px, 1fr) minmax(220px, 1fr);
+    }
+    .workspace-body.agent-collapsed { grid-template-rows: 1fr; }
+    .agent-pane { border-left: 0; border-top: 1px solid var(--line); }
+    .resizer { display: none; }
+  }
+  @media (max-width: 720px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <span class="mark">CM</span>
+    <div>
+      <div class="brand-name">Control Machine</div>
+      <span class="brand-sub">Browser operations console</span>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="health">
+      <span><i class="led" id="led-chrome"></i> Chrome</span>
+      <span><i class="led" id="led-llm"></i> {{ model }}</span>
+    </div>
+  </div>
+</header>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <button class="primary new-btn" onclick="newConversation()">New conversation</button>
+      <input class="nav-search" id="conv-search" placeholder="Search conversations"
+             oninput="syncConversationList()">
+    </div>
+    <section class="nav-block conversations-block">
+      <div class="nav-head">Conversations</div>
+      <div class="nav-scroll" id="conversations"
+           hx-get="/partials/tasks" hx-trigger="load, every 5s" hx-swap="innerHTML"
+           hx-on::after-swap="syncConversationList()">
+        {% include "_tasks.html" %}
+      </div>
+    </section>
+    <section class="nav-block compact">
+      <div class="nav-head">Skills <button type="button" onclick="openSkill(null)">New</button></div>
+      <div class="nav-scroll" id="skills-nav"></div>
+    </section>
+    <section class="nav-block compact">
+      <div class="nav-head">Automations <button type="button" onclick="openAutomation(null)">New</button></div>
+      <div class="nav-scroll" id="automations-nav"></div>
+    </section>
+  </aside>
+
+  <main class="workspace">
+    <section class="view" id="view-chat">
+      <div class="workspace-bar">
+        <div>
+          <div class="workspace-kicker">Conversation</div>
+          <h2 id="conversation-title">New conversation</h2>
+        </div>
+        <div class="workspace-bar-actions">
+          <span class="pill" id="activity-task"></span>
+          <span class="pill" id="status-pill">idle</span>
+          <button id="take-control" onclick="toggleControl()" disabled>Take control</button>
+          <button class="danger" id="cancel" onclick="cancelRun()" disabled>Stop</button>
+          <div class="seg" role="group" aria-label="Agent window">
+            <button type="button" id="mode-collapsed" onclick="setAgentMode('collapsed')">Chat</button>
+            <button type="button" id="mode-split" class="active" onclick="setAgentMode('split')">Split</button>
+            <button type="button" id="mode-expanded" onclick="setAgentMode('expanded')">Browser</button>
+          </div>
+        </div>
+      </div>
+      <div class="workspace-body" id="workspace-body">
+        <div class="chat-pane">
+          <div class="scroll" id="chat">
+            <div class="chat-empty" id="chat-empty">
+              <div>
+                <h3>Start a conversation</h3>
+                <p>Ask the agent to work in the live browser. Follow-ups stay in this thread until you start a new conversation.</p>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <textarea id="input" placeholder="Ask the agent to do something in the browser..."
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
+            <div class="row">
+              <span class="hint" id="hint">Enter to send · Shift+Enter for a new line</span>
+              <button class="primary" id="send" onclick="send()">Send</button>
+            </div>
+          </div>
+        </div>
+        <div class="agent-pane" id="agent-pane">
+          <div class="resizer" id="agent-resizer" title="Resize agent window"></div>
+          <div class="head">
+            Live browser
+            <span id="slot-label" class="pill">no slot</span>
+            <div class="browser-controls">
+              <button type="button" class="ghost" id="activity-toggle" onclick="toggleActivity()">Hide activity</button>
+            </div>
+          </div>
+          <div class="intervention" id="intervention">
+            Agent paused. You can safely use the browser; press Resume agent when finished.
+          </div>
+          <div class="browser-shell" id="browser-shell">
+            <div class="browser-empty" id="browser-empty">
+              Select or start a running conversation to view and control its browser.
+            </div>
+            <iframe id="browser-frame" title="Live browser" style="display:none"
+                    allow="clipboard-read; clipboard-write"></iframe>
+          </div>
+          <div class="head activity-head">Activity</div>
+          <div class="plan" id="plan" style="display:none">
+            <strong style="font-size:12px">Plan</strong>
+            <ol id="plan-list"></ol>
+          </div>
+          <div class="scroll" id="timeline">
+            <p class="empty">Actions the agent takes will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-skill" hidden>
+      <div class="workspace-bar">
+        <div>
+          <div class="workspace-kicker">Skill</div>
+          <h2 id="skill-title">New skill</h2>
+        </div>
+        <div class="workspace-bar-actions" id="skill-bar-actions"></div>
+      </div>
+      <div class="editor-pane" id="skill-form"></div>
+    </section>
+
+    <section class="view" id="view-automation" hidden>
+      <div class="workspace-bar">
+        <div>
+          <div class="workspace-kicker">Automation</div>
+          <h2 id="automation-title">New automation</h2>
+        </div>
+        <div class="workspace-bar-actions" id="automation-bar-actions"></div>
+      </div>
+      <div class="editor-pane" id="automation-form"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+let currentTask = null;
+let stream = null;
+let streamingBubble = null;
+let typingRow = null;
+let streamReady = false;
+let seenSteps = new Set();
+let seenNotes = new Set();
+let currentStatus = "idle";
+let currentSlot = null;
+let currentBrowserUrl = null;
+let currentView = "chat";
+let skillsCache = [];
+let automationsCache = [];
+let skillEditor = null;
+let automationEditor = null;
+let agentMode = localStorage.getItem("agentMode") || "split";
+let agentWidth = Number(localStorage.getItem("agentWidth")) || 46;
+let activityOpen = localStorage.getItem("activityOpen") !== "0";
+
+const SCHEDULE_PRESETS = [
+  {cron: "*/15 * * * *", label: "Every 15 minutes"},
+  {cron: "0 * * * *", label: "Every hour"},
+  {cron: "0 */6 * * *", label: "Every 6 hours"},
+  {cron: "0 9 * * *", label: "Daily at 09:00"},
+  {cron: "0 9 * * 1-5", label: "Weekdays at 09:00"},
+  {cron: "0 9 * * 1", label: "Mondays at 09:00"},
+];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => (
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function showWorkspace(name) {
+  currentView = name;
+  ["chat", "skill", "automation"].forEach(view => {
+    $("view-" + view).hidden = view !== name;
+  });
+  if (name !== "skill") skillEditor = null;
+  if (name !== "automation") automationEditor = null;
+  syncNavSelection();
+}
+
+function setAgentMode(mode) {
+  agentMode = mode;
+  localStorage.setItem("agentMode", mode);
+  const body = $("workspace-body");
+  body.classList.toggle("agent-collapsed", mode === "collapsed");
+  body.classList.toggle("agent-expanded", mode === "expanded");
+  if (mode !== "collapsed") {
+    body.style.setProperty("--agent-width", (mode === "expanded" ? Math.max(agentWidth, 60) : agentWidth) + "%");
+  }
+  ["collapsed", "split", "expanded"].forEach(key => {
+    $("mode-" + key).classList.toggle("active", key === mode);
+  });
+}
+
+function toggleActivity() {
+  activityOpen = !activityOpen;
+  localStorage.setItem("activityOpen", activityOpen ? "1" : "0");
+  $("agent-pane").classList.toggle("activity-collapsed", !activityOpen);
+  $("activity-toggle").textContent = activityOpen ? "Hide activity" : "Show activity";
+}
+
+function bindAgentResize() {
+  const handle = $("agent-resizer");
+  const body = $("workspace-body");
+  handle.addEventListener("mousedown", (event) => {
+    if (agentMode === "collapsed") return;
+    event.preventDefault();
+    body.classList.add("resizing");
+    const startX = event.clientX;
+    const startWidth = $("agent-pane").getBoundingClientRect().width;
+    const total = body.getBoundingClientRect().width;
+    const move = (ev) => {
+      const pct = Math.min(72, Math.max(28, ((startWidth + (startX - ev.clientX)) / total) * 100));
+      agentWidth = pct;
+      body.style.setProperty("--agent-width", pct + "%");
+      if (pct >= 60 && agentMode !== "expanded") setAgentMode("expanded");
+      else if (pct < 58 && agentMode === "expanded") setAgentMode("split");
+    };
+    const up = () => {
+      body.classList.remove("resizing");
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      localStorage.setItem("agentWidth", String(agentWidth));
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+
+function syncConversationList() {
+  const q = ($("conv-search").value || "").trim().toLowerCase();
+  document.querySelectorAll(".conversation").forEach(el => {
+    el.classList.toggle("active", Number(el.dataset.id) === currentTask);
+    const hay = (el.dataset.search || el.textContent).toLowerCase();
+    el.hidden = Boolean(q) && !hay.includes(q);
+  });
+  document.querySelectorAll(".nav-group").forEach(group => {
+    group.hidden = ![...group.querySelectorAll(".conversation")].some(el => !el.hidden);
+  });
+}
+
+function syncNavSelection() {
+  document.querySelectorAll("#skills-nav .nav-item").forEach(el => {
+    el.classList.toggle("active", currentView === "skill" && skillEditor && String(skillEditor.id) === el.dataset.id);
+  });
+  document.querySelectorAll("#automations-nav .nav-item").forEach(el => {
+    el.classList.toggle("active", currentView === "automation" && automationEditor && String(automationEditor.id) === el.dataset.id);
+  });
+}
+
+function setConversationTitle(title) {
+  $("conversation-title").textContent = title || "New conversation";
+}
+
+function hideChatEmpty() {
+  const empty = $("chat-empty");
+  if (empty) empty.remove();
+}
+
+function showChatEmpty() {
+  if ($("chat-empty")) return;
+  $("chat").innerHTML = `<div class="chat-empty" id="chat-empty">
+    <div>
+      <h3>Start a conversation</h3>
+      <p>Ask the agent to work in the live browser. Follow-ups stay in this thread until you start a new conversation.</p>
+    </div>
+  </div>`;
+}
+
+function newConversation() {
+  if (stream) { stream.close(); stream = null; }
+  currentTask = null;
+  streamReady = false;
+  streamingBubble = null;
+  clearTimeline();
+  hideTyping();
+  showChatEmpty();
+  setConversationTitle("New conversation");
+  $("activity-task").textContent = "";
+  setStatus("idle");
+  setBrowser(null, null);
+  showWorkspace("chat");
+  syncConversationList();
+  $("input").focus();
+}
+
+function addMessage(role, text) {
+  hideChatEmpty();
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + role;
+  wrap.innerHTML = `<div class="bubble">${esc(text)}</div>`;
+  $("chat").appendChild(wrap);
+  pinTyping();
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return wrap.querySelector(".bubble");
+}
+
+function setTyping(emoji, label, tool) {
+  const chat = $("chat");
+  hideChatEmpty();
+  if (!typingRow) {
+    typingRow = document.createElement("div");
+    typingRow.className = "msg agent typing-row";
+    typingRow.innerHTML = `<div class="bubble">
+      <span class="typing-emoji"></span>
+      <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="typing-label"></span>
+      <span class="typing-tool" hidden></span>
+    </div>`;
+  }
+  typingRow.querySelector(".typing-emoji").textContent = emoji || "✍️";
+  typingRow.querySelector(".typing-label").textContent = label || "Working";
+  const toolEl = typingRow.querySelector(".typing-tool");
+  if (tool) {
+    toolEl.hidden = false;
+    toolEl.textContent = tool;
+  } else {
+    toolEl.hidden = true;
+    toolEl.textContent = "";
+  }
+  if (typingRow.parentNode !== chat) chat.appendChild(typingRow);
+  else pinTyping();
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function pinTyping() {
+  if (typingRow && typingRow.parentNode) $("chat").appendChild(typingRow);
+}
+
+function hideTyping() {
+  if (typingRow) {
+    typingRow.remove();
+    typingRow = null;
+  }
+}
+
+function setStatus(status) {
+  currentStatus = status || "idle";
+  const pill = $("status-pill");
+  pill.textContent = (status || "idle").replace(/_/g, " ");
+  pill.className = "pill " + (status || "");
+  const active = ["running", "paused", "awaiting_approval"].includes(status);
+  $("cancel").disabled = !active || !currentTask;
+  $("take-control").disabled = !currentTask || !["running", "paused"].includes(status);
+  $("take-control").textContent = status === "paused" ? "Resume agent" : "Take control";
+  $("intervention").style.display = status === "paused" ? "block" : "none";
+}
+
+function setBrowser(slotId, url) {
+  currentSlot = slotId || null;
+  currentBrowserUrl = url || null;
+  $("slot-label").textContent = slotId ? `slot ${slotId}` : "no slot";
+  const frame = $("browser-frame");
+  if (url) {
+    if (frame.src !== url) frame.src = url;
+    frame.style.display = "block";
+    $("browser-empty").style.display = "none";
+  } else {
+    frame.style.display = "none";
+    frame.removeAttribute("src");
+    $("browser-empty").style.display = "block";
+  }
+}
+
+function clearTimeline() {
+  $("timeline").innerHTML = "";
+  $("plan").style.display = "none";
+  seenSteps = new Set();
+  seenNotes = new Set();
+}
+
+function renderStep(step) {
+  if (seenSteps.has(step.id)) return;
+  seenSteps.add(step.id);
+  const el = document.createElement("div");
+  el.className = "step";
+  const args = step.args_json && Object.keys(step.args_json).length
+    ? esc(JSON.stringify(step.args_json)) : "";
+  el.innerHTML = `
+    <div class="step-head">
+      <span class="seq">${step.seq}</span>
+      <span class="tool">${esc(step.tool_name || step.kind)}</span>
+      <span class="args">${args}</span>
+    </div>
+    ${step.result_summary ? `<div class="result">${esc(step.result_summary)}</div>` : ""}
+    ${step.screenshot_path ? `<img src="/runs/${esc(step.screenshot_path)}" alt="screenshot" loading="lazy">` : ""}`;
+  $("timeline").appendChild(el);
+  $("timeline").scrollTop = $("timeline").scrollHeight;
+}
+
+function clearApprovals() {
+  document.querySelectorAll("#timeline .approval").forEach(el => el.remove());
+}
+
+function renderApproval(requests, question) {
+  clearApprovals();
+  const el = document.createElement("div");
+  el.className = "step approval";
+  const asking = requests.length === 1 && requests[0].name === "ask_user";
+  const list = requests.map(r =>
+    `<div class="result"><b>${esc(r.name)}</b> ${esc(JSON.stringify(r.args || {}))}</div>`).join("");
+  if (asking) {
+    el.innerHTML = `
+      <div class="title">Agent needs your help</div>
+      <div class="result">${esc(question || requests[0].args?.question || "Please intervene in the browser.")}</div>
+      <textarea class="response-box" placeholder="Use the browser above, then tell the agent what happened. A live page snapshot is attached automatically when you continue."></textarea>
+      <div class="actions">
+        <button class="primary" onclick="respond(this)">Continue agent</button>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div class="title">Needs your approval</div>
+      ${list}
+      <div class="actions">
+        <button class="primary" onclick="decide('approve', this)">Approve</button>
+        <button class="danger" onclick="decide('reject', this)">Reject</button>
+      </div>`;
+  }
+  $("timeline").appendChild(el);
+  $("timeline").scrollTop = $("timeline").scrollHeight;
+}
+
+function renderPlan(todos) {
+  if (!todos || !todos.length) return;
+  $("plan").style.display = "block";
+  $("plan-list").innerHTML = todos.map(t =>
+    `<li class="${esc(t.status || "")}">${esc(t.content || t)}</li>`).join("");
+}
+
+function note(text, isError) {
+  if (seenNotes.has(text)) return;
+  seenNotes.add(text);
+  const el = document.createElement("div");
+  el.className = "note" + (isError ? " err" : "");
+  el.textContent = text;
+  $("timeline").appendChild(el);
+  $("timeline").scrollTop = $("timeline").scrollHeight;
+}
+
+function handleEvent(ev) {
+  if (ev.type === "caught_up") {
+    streamReady = true;
+    if (currentStatus === "running" && !typingRow) setTyping("✍️", "Thinking");
+    else if (currentStatus === "paused") setTyping("⏸️", "Paused");
+    return;
+  }
+  if (ev.type === "typing") {
+    if (streamReady) setTyping(ev.emoji, ev.label, ev.tool);
+    return;
+  }
+  if (ev.type === "step") renderStep(ev.step);
+  else if (ev.type === "slot") setBrowser(ev.slot_id, ev.novnc_url);
+  else if (ev.type === "interrupt") renderApproval(ev.requests || [], ev.question);
+  else if (ev.type === "todos") renderPlan(ev.todos);
+  else if (ev.type === "token") {
+    if (!streamingBubble) streamingBubble = addMessage("agent", "");
+    streamingBubble.textContent += ev.text;
+    pinTyping();
+    $("chat").scrollTop = $("chat").scrollHeight;
+  } else if (ev.type === "message") {
+    if (streamingBubble) { streamingBubble.textContent = ev.text; streamingBubble = null; }
+    else addMessage("agent", ev.text);
+    pinTyping();
+  } else if (ev.type === "status") {
+    setStatus(ev.status);
+    if (ev.status !== "awaiting_approval") clearApprovals();
+    if (ev.status === "error") { note(ev.error || "Run failed.", true); streamingBubble = null; }
+    if (ev.status === "cancelled") { note("Run cancelled."); streamingBubble = null; }
+    if (["done", "error", "cancelled", "awaiting_approval"].includes(ev.status)) {
+      hideTyping();
+      streamingBubble = null;
+      if (ev.status === "cancelled") setBrowser(null, null);
+      if (["done", "error", "cancelled"].includes(ev.status)) htmx.trigger("#conversations", "load");
+    } else if (ev.status === "paused" && streamReady) {
+      setTyping("⏸️", "Paused");
+    } else if (ev.status === "running" && streamReady && !typingRow) {
+      setTyping("✍️", "Thinking");
+    }
+  }
+}
+
+function openStream(taskId) {
+  if (stream) stream.close();
+  streamReady = false;
+  stream = new EventSource(`/api/stream/${taskId}`);
+  stream.addEventListener("agent", (e) => handleEvent(JSON.parse(e.data)));
+  stream.onerror = () => { /* EventSource retries on its own */ };
+}
+
+async function send() {
+  const box = $("input");
+  const text = box.value.trim();
+  if (!text) return;
+  box.value = "";
+  showWorkspace("chat");
+  addMessage("user", text);
+
+  const keepThread = Boolean(currentTask);
+  if (!keepThread) {
+    clearTimeline();
+    hideTyping();
+    $("chat").innerHTML = "";
+    addMessage("user", text);
+    setConversationTitle(preview(text, 48));
+  }
+
+  setStatus("running");
+  setTyping("✍️", "Thinking");
+
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text, task_id: keepThread ? currentTask : null }),
+  });
+  if (!res.ok) {
+    hideTyping();
+    setStatus("idle");
+    note((await res.json().catch(() => ({}))).detail || "Could not start the task.", true);
+    return;
+  }
+  const task = await res.json();
+  currentTask = task.id;
+  setBrowser(null, null);
+  $("activity-task").textContent = "#" + task.id;
+  if (task.title) setConversationTitle(task.title);
+  setStatus("running");
+  openStream(task.id);
+  htmx.trigger("#conversations", "load");
+}
+
+async function loadTask(taskId) {
+  showWorkspace("chat");
+  const res = await fetch(`/api/tasks/${taskId}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  currentTask = taskId;
+  showWorkspace("chat");
+  $("activity-task").textContent = "#" + taskId;
+  setConversationTitle(data.task.title || preview(data.task.prompt, 48));
+  setBrowser(data.run?.slot_id, data.run?.novnc_url);
+  clearTimeline();
+  hideTyping();
+  $("chat").innerHTML = "";
+  const thread = data.thread_tasks && data.thread_tasks.length ? data.thread_tasks : [data.task];
+  for (const turn of thread) {
+    if (turn.id === taskId) continue;
+    addMessage("user", turn.prompt);
+    if (turn.result) addMessage("agent", turn.result);
+    if (turn.error) note(turn.error, true);
+  }
+  addMessage("user", data.task.prompt);
+  data.steps.forEach(renderStep);
+  const replayHasAnswer = (data.events || []).some(e => e.type === "message");
+  if (data.task.result && !replayHasAnswer) addMessage("agent", data.task.result);
+  if (data.task.error) note(data.task.error, true);
+  (data.events || []).filter(e => e.type === "todos").forEach(e => renderPlan(e.todos));
+  (data.events || []).filter(e => e.type === "interrupt").forEach(e => {
+    if (data.task.status === "awaiting_approval") renderApproval(e.requests || [], e.question);
+  });
+  setStatus(data.task.status);
+  openStream(taskId);
+  syncConversationList();
+}
+
+async function decide(decision, button) {
+  button.closest(".actions").querySelectorAll("button").forEach(b => b.disabled = true);
+  const res = await fetch(`/api/tasks/${currentTask}/decide`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision }),
+  });
+  if (res.ok) {
+    setStatus("running");
+    setTyping("✍️", "Thinking");
+  } else note("Could not send that decision.", true);
+}
+
+async function respond(button) {
+  const card = button.closest(".approval");
+  const message = card.querySelector(".response-box").value.trim();
+  if (!message) {
+    note("Tell the agent what you did or decided before continuing.", true);
+    return;
+  }
+  button.disabled = true;
+  const res = await fetch(`/api/tasks/${currentTask}/decide`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision: "respond", message }),
+  });
+  if (res.ok) {
+    clearApprovals();
+    setStatus("running");
+    setTyping("✍️", "Thinking");
+  } else {
+    button.disabled = false;
+    note("Could not resume the agent.", true);
+  }
+}
+
+async function toggleControl() {
+  if (!currentTask) return;
+  const action = currentStatus === "paused" ? "resume" : "pause";
+  const res = await fetch(`/api/tasks/${currentTask}/${action}`, { method: "POST" });
+  if (!res.ok) {
+    note((await res.json().catch(() => ({}))).detail || `Could not ${action} the agent.`, true);
+  }
+}
+
+async function cancelRun() {
+  if (!currentTask) return;
+  await fetch(`/api/tasks/${currentTask}/cancel`, { method: "POST" });
+}
+
+async function pollHealth() {
+  try {
+    const h = await (await fetch("/api/health")).json();
+    $("led-chrome").className = "led " + (h.chrome ? "up" : "down");
+    $("led-llm").className = "led " + ((h.llm ?? h.ollama) ? "up" : "down");
+    if (h.active_task_ids?.length && !currentTask) loadTask(h.active_task_ids[0]);
+    loadSkills(true);
+    loadAutomations(true);
+  } catch (e) { /* dashboard still usable */ }
+}
+
+function errorDetail(data, fallback) {
+  const detail = data && data.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  return fallback;
+}
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body !== undefined ? {"Content-Type": "application/json"} : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(errorDetail(data, `Request failed (${res.status})`));
+  return data;
+}
+
+function attachRun(task, userText) {
+  currentTask = task.id;
+  setBrowser(null, null);
+  $("activity-task").textContent = "#" + task.id;
+  setConversationTitle(task.title || preview(userText, 48));
+  setStatus("running");
+  clearTimeline();
+  hideTyping();
+  $("chat").innerHTML = "";
+  addMessage("user", userText);
+  setTyping("✍️", "Thinking");
+  openStream(task.id);
+  htmx.trigger("#conversations", "load");
+  showWorkspace("chat");
+}
+
+function formatWhen(iso) {
+  if (!iso) return "never";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return String(iso);
+  return date.toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
+}
+
+function preview(text, limit = 140) {
+  const compact = String(text || "").replace(/\s+/g, " ").trim();
+  return compact.length > limit ? compact.slice(0, limit) + "..." : compact;
+}
+
+async function loadSkills(silent) {
+  try {
+    skillsCache = await api("GET", "/api/skills");
+  } catch (err) {
+    if (!silent) $("skills-nav").innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+    return;
+  }
+  renderSkillsNav();
+  if (!silent && currentView === "skill" && skillEditor) renderSkillWorkspace();
+}
+
+function renderSkillsNav() {
+  if (!skillsCache.length) {
+    $("skills-nav").innerHTML = `<p class="empty">Save reusable instructions.</p>`;
+    return;
+  }
+  $("skills-nav").innerHTML = skillsCache.map(skill => `
+    <button type="button" class="nav-item" data-id="${skill.id}" onclick="openSkill(${skill.id})">
+      <span class="nav-item-body">
+        <span class="nav-item-title">${esc(skill.name)}</span>
+        <span class="nav-item-meta">${esc(preview(skill.description || skill.prompt, 48))}</span>
+      </span>
+      <span class="run" onclick="event.stopPropagation(); runSkill(${skill.id})">Run</span>
+    </button>`).join("");
+  syncNavSelection();
+}
+
+function openSkill(skillId) {
+  skillEditor = {id: skillId};
+  showWorkspace("skill");
+  renderSkillWorkspace();
+}
+
+function renderSkillWorkspace() {
+  const existing = skillEditor.id
+    ? skillsCache.find(s => s.id === skillEditor.id)
+    : {name: "", description: "", prompt: ""};
+  if (skillEditor.id && !existing) {
+    skillEditor = {id: null};
+  }
+  const skill = existing || {name: "", description: "", prompt: ""};
+  $("skill-title").textContent = skillEditor.id ? (skill.name || "Skill") : "New skill";
+  $("skill-form").innerHTML = `
+    <div class="field"><label>Name</label>
+      <input id="skill-name" value="${esc(skill.name || "")}" placeholder="Check inbox"></div>
+    <div class="field"><label>Description</label>
+      <input id="skill-desc" value="${esc(skill.description || "")}" placeholder="What this skill is for"></div>
+    <div class="field"><label>Instructions</label>
+      <textarea id="skill-prompt" placeholder="Tell the agent exactly what to do in the browser...">${esc(skill.prompt || "")}</textarea></div>
+    <p class="form-error" id="skill-error"></p>
+    <div class="editor-actions">
+      ${skillEditor.id ? `<button class="danger" onclick="removeSkill(${skillEditor.id})">Delete</button>` : ""}
+      <span class="hint" style="flex:1;color:var(--muted);font-size:11px">Skills start a fresh browser task each time.</span>
+      <button onclick="saveSkill(false)">Save</button>
+      <button class="primary" onclick="saveSkill(true)">Save &amp; run</button>
+    </div>`;
+  $("skill-bar-actions").innerHTML = skillEditor.id
+    ? `<button class="primary" onclick="runSkill(${skillEditor.id})">Run skill</button>`
+    : "";
+}
+
+function skillFormPayload() {
+  return {
+    name: $("skill-name").value,
+    description: $("skill-desc").value,
+    prompt: $("skill-prompt").value,
+  };
+}
+
+async function saveSkill(andRun) {
+  const payload = skillFormPayload();
+  const errorBox = $("skill-error");
+  try {
+    const skill = skillEditor.id
+      ? await api("PUT", `/api/skills/${skillEditor.id}`, payload)
+      : await api("POST", "/api/skills", payload);
+    skillEditor = {id: skill.id};
+    await loadSkills();
+    renderSkillWorkspace();
+    if (andRun) await runSkill(skill.id);
+  } catch (err) {
+    if (errorBox) errorBox.textContent = err.message;
+    else note(err.message, true);
+  }
+}
+
+async function runSkill(skillId) {
+  try {
+    const named = skillsCache.find(s => s.id === skillId);
+    const task = await api("POST", `/api/skills/${skillId}/run`, {extra: ""});
+    attachRun(task, named ? named.prompt : task.prompt || "Run skill");
+  } catch (err) {
+    note(err.message, true);
+  }
+}
+
+async function removeSkill(skillId) {
+  if (!confirm("Delete this skill? Automations that used it keep running only if they have their own instructions.")) return;
+  try {
+    await api("DELETE", `/api/skills/${skillId}`);
+    skillEditor = null;
+    await loadSkills();
+    showWorkspace("chat");
+  } catch (err) {
+    note(err.message, true);
+  }
+}
+
+async function loadAutomations(silent) {
+  try {
+    automationsCache = await api("GET", "/api/automations");
+    if (!skillsCache.length) skillsCache = await api("GET", "/api/skills");
+  } catch (err) {
+    if (!silent) $("automations-nav").innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+    return;
+  }
+  renderAutomationsNav();
+  if (!silent && currentView === "automation" && automationEditor) renderAutomationWorkspace();
+}
+
+function renderAutomationsNav() {
+  if (!automationsCache.length) {
+    $("automations-nav").innerHTML = `<p class="empty">Schedule a skill or prompt.</p>`;
+    return;
+  }
+  $("automations-nav").innerHTML = automationsCache.map(auto => `
+    <button type="button" class="nav-item" data-id="${auto.id}" onclick="openAutomation(${auto.id})">
+      <span class="dot ${auto.enabled ? "running" : ""}"></span>
+      <span class="nav-item-body">
+        <span class="nav-item-title">${esc(auto.name)}</span>
+        <span class="nav-item-meta">${esc(auto.schedule_label || auto.schedule)} · ${auto.enabled ? "on" : "off"}</span>
+      </span>
+      <span class="run" onclick="event.stopPropagation(); runAutomation(${auto.id})">Run</span>
+    </button>`).join("");
+  syncNavSelection();
+}
+
+function openAutomation(automationId) {
+  automationEditor = {id: automationId};
+  showWorkspace("automation");
+  renderAutomationWorkspace();
+}
+
+function scheduleSelectHtml(current) {
+  const known = SCHEDULE_PRESETS.some(p => p.cron === current);
+  const options = SCHEDULE_PRESETS.map(p =>
+    `<option value="${esc(p.cron)}" ${p.cron === current ? "selected" : ""}>${esc(p.label)}</option>`
+  ).join("") + `<option value="custom" ${known ? "" : "selected"}>Custom cron</option>`;
+  return `
+    <div class="field"><label>Schedule (server local time)</label>
+      <select id="auto-schedule" onchange="onScheduleChange()">${options}</select></div>
+    <div class="field" id="auto-cron-wrap" style="${known ? "display:none" : ""}">
+      <label>Cron</label>
+      <input id="auto-cron" value="${esc(known ? "" : (current || ""))}" placeholder="0 9 * * 1-5">
+    </div>`;
+}
+
+function onScheduleChange() {
+  const custom = $("auto-schedule").value === "custom";
+  $("auto-cron-wrap").style.display = custom ? "" : "none";
+}
+
+function selectedCron() {
+  const value = $("auto-schedule").value;
+  return value === "custom" ? $("auto-cron").value : value;
+}
+
+function renderAutomationWorkspace() {
+  const existing = automationEditor.id
+    ? automationsCache.find(a => a.id === automationEditor.id)
+    : {name: "", description: "", skill_id: null, prompt: "", schedule: "0 * * * *", enabled: true};
+  if (automationEditor.id && !existing) {
+    automationEditor = {id: null};
+  }
+  const auto = existing || {name: "", description: "", skill_id: null, prompt: "", schedule: "0 * * * *", enabled: true};
+  $("automation-title").textContent = automationEditor.id ? (auto.name || "Automation") : "New automation";
+  const skillOptions = [`<option value="">No skill — use instructions below</option>`]
+    .concat(skillsCache.map(s =>
+      `<option value="${s.id}" ${s.id === auto.skill_id ? "selected" : ""}>${esc(s.name)}</option>`
+    )).join("");
+  $("automation-form").innerHTML = `
+    <div class="field"><label>Name</label>
+      <input id="auto-name" value="${esc(auto.name || "")}" placeholder="Morning inbox"></div>
+    <div class="field"><label>Description</label>
+      <input id="auto-desc" value="${esc(auto.description || "")}" placeholder="Optional"></div>
+    <div class="field"><label>Skill</label>
+      <select id="auto-skill">${skillOptions}</select></div>
+    ${scheduleSelectHtml(auto.schedule || "0 * * * *")}
+    <div class="field"><label>Extra instructions</label>
+      <textarea id="auto-prompt" placeholder="Optional additions, or the full prompt if no skill is selected">${esc(auto.prompt || "")}</textarea></div>
+    <div class="field row">
+      <input type="checkbox" id="auto-enabled" ${auto.enabled !== false ? "checked" : ""}>
+      <label for="auto-enabled">Enabled</label>
+    </div>
+    <div class="meta" style="color:var(--muted);font-size:12px;margin-bottom:12px">
+      Last run ${esc(formatWhen(auto.last_run_at))} · next ${auto.enabled ? esc(formatWhen(auto.next_run_at)) : "paused"}
+    </div>
+    ${auto.last_error ? `<p class="form-error">${esc(auto.last_error)}</p>` : ""}
+    <p class="form-error" id="auto-error"></p>
+    <div class="editor-actions">
+      ${automationEditor.id ? `<button class="danger" onclick="removeAutomation(${automationEditor.id})">Delete</button>` : ""}
+      <span class="hint" style="flex:1;color:var(--muted);font-size:11px">Due jobs retry if every browser slot is busy.</span>
+      <button class="primary" onclick="saveAutomation()">Save</button>
+    </div>`;
+  $("automation-bar-actions").innerHTML = automationEditor.id
+    ? `<button onclick="toggleAutomation(${auto.id}, ${auto.enabled ? "false" : "true"})">${auto.enabled ? "Pause" : "Enable"}</button>
+       <button class="primary" onclick="runAutomation(${auto.id})">Run now</button>`
+    : "";
+}
+
+function automationFormPayload() {
+  const skillVal = $("auto-skill").value;
+  return {
+    name: $("auto-name").value,
+    description: $("auto-desc").value,
+    skill_id: skillVal ? Number(skillVal) : null,
+    prompt: $("auto-prompt").value,
+    schedule: selectedCron(),
+    enabled: $("auto-enabled").checked,
+  };
+}
+
+async function saveAutomation() {
+  const payload = automationFormPayload();
+  const errorBox = $("auto-error");
+  try {
+    const saved = automationEditor.id
+      ? await api("PUT", `/api/automations/${automationEditor.id}`, payload)
+      : await api("POST", "/api/automations", payload);
+    automationEditor = {id: saved.id};
+    await loadAutomations();
+    renderAutomationWorkspace();
+  } catch (err) {
+    if (errorBox) errorBox.textContent = err.message;
+    else note(err.message, true);
+  }
+}
+
+function automationPayload(auto, overrides = {}) {
+  return {
+    name: auto.name,
+    description: auto.description || "",
+    skill_id: auto.skill_id,
+    prompt: auto.prompt || "",
+    schedule: auto.schedule,
+    enabled: auto.enabled,
+    ...overrides,
+  };
+}
+
+async function toggleAutomation(automationId, enabled) {
+  const auto = automationsCache.find(a => a.id === automationId);
+  if (!auto) return;
+  try {
+    await api("PUT", `/api/automations/${automationId}`, automationPayload(auto, {enabled}));
+    await loadAutomations();
+    if (automationEditor && automationEditor.id === automationId) renderAutomationWorkspace();
+  } catch (err) {
+    note(err.message, true);
+  }
+}
+
+async function runAutomation(automationId) {
+  try {
+    const auto = automationsCache.find(a => a.id === automationId);
+    const task = await api("POST", `/api/automations/${automationId}/run`);
+    attachRun(task, auto ? (auto.skill_prompt || auto.prompt || auto.name) : task.prompt || "Run automation");
+    loadAutomations();
+  } catch (err) {
+    note(err.message, true);
+  }
+}
+
+async function removeAutomation(automationId) {
+  if (!confirm("Delete this automation?")) return;
+  try {
+    await api("DELETE", `/api/automations/${automationId}`);
+    automationEditor = null;
+    await loadAutomations();
+    showWorkspace("chat");
+  } catch (err) {
+    note(err.message, true);
+  }
+}
+
+bindAgentResize();
+setAgentMode(agentMode);
+if (!activityOpen) {
+  $("agent-pane").classList.add("activity-collapsed");
+  $("activity-toggle").textContent = "Show activity";
+}
+pollHealth();
+setInterval(pollHealth, 5000);
+setStatus("idle");
+loadSkills();
+loadAutomations();
+</script>
+</body>
+</html>

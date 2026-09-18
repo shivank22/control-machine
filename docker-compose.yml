@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: control-machine-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: control_machine
+    ports:
+      - "5442:5432"
+    volumes:
+      - control_machine_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d control_machine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  browser-1:
+    profiles: ["browsers"]
+    build:
+      context: .
+      dockerfile: docker/browser/Dockerfile
+    container_name: control-machine-browser-1
+    restart: unless-stopped
+    shm_size: 2gb
+    environment:
+      SCREEN_GEOMETRY: 1280x900x24
+    ports:
+      - "127.0.0.1:9231:9223"
+      - "127.0.0.1:6081:6080"
+    volumes:
+      - browser_1_profile:/profile
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9223/json/version >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  browser-2:
+    profiles: ["browsers"]
+    build:
+      context: .
+      dockerfile: docker/browser/Dockerfile
+    container_name: control-machine-browser-2
+    restart: unless-stopped
+    shm_size: 2gb
+    environment:
+      SCREEN_GEOMETRY: 1280x900x24
+    ports:
+      - "127.0.0.1:9232:9223"
+      - "127.0.0.1:6082:6080"
+    volumes:
+      - browser_2_profile:/profile
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9223/json/version >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  control_machine_pgdata:
+  browser_1_profile:
+  browser_2_profile:

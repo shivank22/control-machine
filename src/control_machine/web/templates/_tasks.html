@@ -1,0 +1,19 @@
+{% for label, items in groups %}
+<div class="nav-group">
+  <div class="nav-group-label">{{ label }}</div>
+  {% for task in items %}
+  <button type="button" class="nav-item conversation" data-id="{{ task.id }}"
+          data-thread="{{ task.thread_id }}"
+          data-search="{{ task.title }} {{ task.skill_name or '' }} {{ task.automation_name or '' }}"
+          onclick="loadTask({{ task.id }})">
+    <span class="dot {{ task.status }}"></span>
+    <span class="nav-item-body">
+      <span class="nav-item-title">{{ task.title }}</span>
+      <span class="nav-item-meta">{% if task.automation_name %}{{ task.automation_name }}{% elif task.skill_name %}{{ task.skill_name }}{% else %}Chat{% endif %} · {{ task.status.replace('_', ' ') }}{% if task.task_count and task.task_count > 1 %} · {{ task.task_count }} turns{% endif %}</span>
+    </span>
+  </button>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">No conversations yet. Start one to put the agent to work.</p>
+{% endfor %}
