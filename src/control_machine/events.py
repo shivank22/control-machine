@@ -22,6 +22,7 @@ class EventBus:
         # Typing is live UI state. Storing every tick would flash a stale
         # indicator when a finished run is replayed, so only the latest is kept.
         self._typing: dict[int, dict[str, Any]] = {}
+        self._all: set[asyncio.Queue] = set()
 
     def publish(self, task_id: int, event: dict[str, Any]) -> None:
         if event.get("type") == "typing":
@@ -36,6 +37,9 @@ class EventBus:
 
         for queue in list(self._subscribers.get(task_id, ())):
             queue.put_nowait(event)
+        packed = (task_id, event)
+        for queue in list(self._all):
+            queue.put_nowait(packed)
 
     def history(self, task_id: int) -> list[dict[str, Any]]:
         return list(self._history.get(task_id, ()))
@@ -55,6 +59,14 @@ class EventBus:
             subscribers.discard(queue)
             if not subscribers:
                 self._subscribers.pop(task_id, None)
+
+    def subscribe_all(self) -> asyncio.Queue:
+        queue: asyncio.Queue = asyncio.Queue()
+        self._all.add(queue)
+        return queue
+
+    def unsubscribe_all(self, queue: asyncio.Queue) -> None:
+        self._all.discard(queue)
 
     def forget(self, task_id: int) -> None:
         self._history.pop(task_id, None)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ from croniter import croniter
 
 from .db import Database
 from .runner import RunManager, RunnerBusy
+
+log = logging.getLogger(__name__)
 
 SCHEDULE_PRESETS: dict[str, str] = {
     "*/15 * * * *": "Every 15 minutes",
@@ -100,8 +103,8 @@ class AutomationScheduler:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - keep the loop alive
-                print(f"automation scheduler: {type(exc).__name__}: {exc}")
+            except Exception:  # noqa: BLE001 - keep the loop alive
+                log.exception("automation scheduler tick failed")
 
     async def tick(self) -> None:
         for automation in await self.db.due_automations():
@@ -138,6 +141,7 @@ class AutomationScheduler:
             )
             return
         except Exception as exc:  # noqa: BLE001 - recorded on the automation
+            log.exception("Could not start automation %s", automation_id)
             await self.db.set_automation_error(
                 automation_id, f"Could not start: {type(exc).__name__}: {exc}"
             )

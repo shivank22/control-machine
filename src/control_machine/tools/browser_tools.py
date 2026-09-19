@@ -12,6 +12,7 @@ the escape hatch of last resort.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,8 @@ from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 from ..browser import BrowserError, BrowserSession
 from ..config import Settings
+
+log = logging.getLogger(__name__)
 
 ACTING_TOOLS = frozenset(
     {
@@ -329,6 +332,7 @@ async def _settle(page: Any) -> None:
 
 def _explain(exc: Exception, prefix: str) -> str:
     """Hand failures back as guidance; the agent should retry, not crash."""
+    log.warning("%s: %s", prefix, exc)
     if isinstance(exc, PlaywrightTimeout):
         return (
             f"{prefix}: timed out. The element may be hidden, covered, or the page may "

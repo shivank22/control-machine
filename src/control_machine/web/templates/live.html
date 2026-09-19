@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Live desktop</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #090b0f; color: #e8eaed; font-family: system-ui, sans-serif; overflow: hidden; }
+    #bar {
+      display: flex; gap: 8px; align-items: center; padding: 8px 10px;
+      background: #12151c; border-bottom: 1px solid #2a3140; flex: none;
+      flex-wrap: wrap;
+    }
+    #bar button {
+      appearance: none; border: 1px solid #3d4658; background: #1b2230; color: #e8eaed;
+      border-radius: 8px; padding: 8px 10px; font-size: 14px;
+    }
+    #bar button.active { border-color: #7cb7ff; color: #7cb7ff; }
+    #screen {
+      flex: 1; min-height: 0; background: #000; overflow: auto;
+      position: relative;
+      touch-action: pan-x pan-y;
+    }
+    #frame { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+    #dot {
+      position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+      border: 2px solid #7cb7ff; border-radius: 50%; pointer-events: none;
+      opacity: 0; transition: opacity 0.4s;
+    }
+    #keys {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 32px;
+      margin: 0;
+      padding: 0;
+      opacity: 0.05;
+      color: transparent;
+      caret-color: transparent;
+      background: transparent;
+      border: 0;
+      resize: none;
+      font-size: 16px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #status { font-size: 12px; color: #9aa3b2; padding: 0 10px 8px; }
+    #help { font-size: 13px; color: #c5cad3; padding: 16px; line-height: 1.45; }
+    main { display: flex; flex-direction: column; height: 100%; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="bar">
+      <button type="button" id="btn-page-1" class="active">1</button>
+      <button type="button" id="btn-page-2" class="hidden">2</button>
+      <button type="button" id="btn-apps">Apps</button>
+      <button type="button" id="btn-menu">Menu</button>
+      <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+      <button type="button" id="btn-keys">Keyboard</button>
+    </div>
+    <div id="status">Connecting…</div>
+    <div id="screen">
+      <img id="frame" alt="Live desktop" draggable="false" class="hidden">
+      <div id="dot"></div>
+    </div>
+    <div id="help" class="hidden"></div>
+  </main>
+  <textarea
+    id="keys"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="none"
+    spellcheck="false"
+    enterkeyhint="enter"
+    inputmode="text"
+    rows="1"
+    aria-label="Type on this Mac"
+  ></textarea>
+  <script>
+    const TOKEN = {{ token | tojson }};
+    const DESKTOP_PATH = {{ desktop_ws_path | tojson }};
+    const wsBase = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+
+    const main = document.querySelector("main");
+    const status = document.getElementById("status");
+    const help = document.getElementById("help");
+    const screen = document.getElementById("screen");
+    const frame = document.getElementById("frame");
+    const keys = document.getElementById("keys");
+    const dot = document.getElementById("dot");
+    const btnKeys = document.getElementById("btn-keys");
+    const btnPage1 = document.getElementById("btn-page-1");
+    const btnPage2 = document.getElementById("btn-page-2");
+    const btnApps = document.getElementById("btn-apps");
+    const btnMenu = document.getElementById("btn-menu");
+
+    let socket = null;
+    let objectUrl = null;
+    let zoom = 1;
+    let pinching = false;
+    let lastPinchDist = 0;
+    let tap = null;
+    let keyboardOn = false;
+    let page = 1;
+
+    function setStatus(text) { status.textContent = text; }
+    function showHelp(html) {
+      help.innerHTML = html;
+      help.classList.remove("hidden");
+    }
+    function hideHelp() {
+      help.classList.add("hidden");
+      help.textContent = "";
+    }
+    function applyZoom() {
+      frame.style.width = (zoom * 100) + "%";
+    }
+    function desktopHint() {
+      if (keyboardOn) {
+        setStatus("Typing on this Mac — tap Keyboard to hide");
+      } else {
+        setStatus("Screen " + page + " — tap to click. Apps shows windows. Menu opens the menu bar.");
+      }
+    }
+
+    function fitViewport() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      main.style.transform = "translateY(" + vv.offsetTop + "px)";
+      main.style.height = vv.height + "px";
+    }
+
+    function openKeyboard() {
+      keyboardOn = true;
+      btnKeys.classList.add("active");
+      keys.value = "";
+      keys.focus({ preventScroll: true });
+      desktopHint();
+    }
+
+    function closeKeyboard() {
+      keyboardOn = false;
+      btnKeys.classList.remove("active");
+      keys.blur();
+      desktopHint();
+    }
+
+    function stopAll() {
+      if (socket) {
+        try { socket.close(); } catch (_) {}
+        socket = null;
+      }
+    }
+
+    function connectDesktop() {
+      stopAll();
+      hideHelp();
+      frame.classList.remove("hidden");
+      setStatus("Connecting to this Mac…");
+      const url = wsBase + DESKTOP_PATH + "?t=" + encodeURIComponent(TOKEN);
+      socket = new WebSocket(url);
+      socket.binaryType = "blob";
+      socket.onopen = () => desktopHint();
+      socket.onerror = () => setStatus("Desktop stream error");
+      socket.onclose = () => setStatus("Disconnected");
+      socket.onmessage = (ev) => {
+        if (typeof ev.data === "string") {
+          try {
+            const payload = JSON.parse(ev.data);
+            if (payload.pages) applyPages(payload.page || page, payload.pages);
+            if (payload.error) {
+              showHelp("<p><strong>" + payload.error + "</strong></p>");
+              setStatus("Action failed — see note below");
+            }
+          } catch (_) {}
+          return;
+        }
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(ev.data);
+        frame.src = objectUrl;
+        frame.classList.remove("hidden");
+      };
+    }
+
+    function sendDesktop(payload) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(payload));
+        return true;
+      }
+      setStatus("Not connected — reopen the live link");
+      return false;
+    }
+
+    function markTap(clientX, clientY) {
+      const rect = screen.getBoundingClientRect();
+      dot.style.left = (clientX - rect.left + screen.scrollLeft) + "px";
+      dot.style.top = (clientY - rect.top + screen.scrollTop) + "px";
+      dot.style.opacity = "1";
+      setTimeout(() => { dot.style.opacity = "0"; }, 250);
+    }
+
+    function sendClick(clientX, clientY) {
+      if (!frame.naturalWidth) return;
+      const rect = frame.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
+      const x = Math.round((clientX - rect.left) / rect.width * frame.naturalWidth);
+      const y = Math.round((clientY - rect.top) / rect.height * frame.naturalHeight);
+      if (sendDesktop({ type: "click", x, y, w: frame.naturalWidth, h: frame.naturalHeight })) {
+        markTap(clientX, clientY);
+        if (!keyboardOn) setStatus("Clicked " + x + "," + y);
+      }
+    }
+
+    function onPointerDown(ev) {
+      if (ev.pointerType === "touch") return;
+      sendClick(ev.clientX, ev.clientY);
+      ev.preventDefault();
+      openKeyboard();
+    }
+
+    frame.addEventListener("pointerdown", onPointerDown);
+    frame.addEventListener("touchstart", (ev) => {
+      pinching = ev.touches.length > 1;
+      lastPinchDist = 0;
+      if (ev.touches.length === 1) {
+        const t = ev.touches[0];
+        tap = { x: t.clientX, y: t.clientY, t: Date.now() };
+      } else {
+        tap = null;
+      }
+    }, { passive: true });
+    frame.addEventListener("touchmove", (ev) => {
+      if (ev.touches.length === 2) {
+        pinching = true;
+        tap = null;
+        const dist = Math.hypot(
+          ev.touches[0].clientX - ev.touches[1].clientX,
+          ev.touches[0].clientY - ev.touches[1].clientY
+        );
+        if (lastPinchDist) {
+          zoom = Math.min(4, Math.max(1, zoom * (dist / lastPinchDist)));
+          applyZoom();
+        }
+        lastPinchDist = dist;
+        return;
+      }
+      if (tap) {
+        const t = ev.touches[0];
+        if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > 12) tap = null;
+      }
+    }, { passive: true });
+    frame.addEventListener("touchend", (ev) => {
+      if (tap && !pinching && ev.changedTouches.length === 1 && Date.now() - tap.t < 600) {
+        const t = ev.changedTouches[0];
+        if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) <= 12) {
+          sendClick(t.clientX, t.clientY);
+          openKeyboard();
+        }
+      }
+      pinching = ev.touches.length > 1;
+      lastPinchDist = 0;
+      if (ev.touches.length === 0) tap = null;
+      ev.preventDefault();
+    }, { passive: false });
+
+    document.getElementById("zoom-in").addEventListener("click", () => {
+      zoom = Math.min(4, zoom + 0.25);
+      applyZoom();
+    });
+    document.getElementById("zoom-out").addEventListener("click", () => {
+      zoom = Math.max(1, zoom - 0.25);
+      applyZoom();
+    });
+    function applyPages(n, pages) {
+      page = n;
+      btnPage1.classList.toggle("active", n === 1);
+      btnPage2.classList.toggle("hidden", pages < 2);
+      btnPage2.classList.toggle("active", n === 2);
+    }
+    function setPage(n) {
+      if (!sendDesktop({ type: "page", n })) return;
+      applyPages(n, btnPage2.classList.contains("hidden") ? 1 : 2);
+      desktopHint();
+    }
+    btnPage1.addEventListener("click", () => setPage(1));
+    btnPage2.addEventListener("click", () => setPage(2));
+    btnApps.addEventListener("click", () => {
+      if (!sendDesktop({ type: "apps" })) return;
+      const on = !btnApps.classList.contains("active");
+      btnApps.classList.toggle("active", on);
+      if (on) btnMenu.classList.remove("active");
+      setStatus(on ? "All windows — tap Apps again to close" : "Apps hidden");
+    });
+    btnMenu.addEventListener("click", () => {
+      if (!sendDesktop({ type: "menu" })) return;
+      const on = !btnMenu.classList.contains("active");
+      btnMenu.classList.toggle("active", on);
+      if (on) btnApps.classList.remove("active");
+      setStatus(on ? "Apple menu — tap an item, or Menu to close" : "Menu closed");
+    });
+    btnKeys.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (keyboardOn && document.activeElement === keys) closeKeyboard();
+      else openKeyboard();
+    });
+
+    keys.addEventListener("keydown", (ev) => {
+      const named = { Backspace: "backspace", Enter: "return", Tab: "tab", Escape: "escape" };
+      if (named[ev.key]) {
+        sendDesktop({ type: "key", key: named[ev.key] });
+        ev.preventDefault();
+      }
+    });
+    let typedFromBeforeInput = false;
+    keys.addEventListener("beforeinput", (ev) => {
+      if (ev.inputType === "insertLineBreak") {
+        sendDesktop({ type: "key", key: "return" });
+        ev.preventDefault();
+        return;
+      }
+      if (ev.inputType === "deleteContentBackward" || ev.inputType === "deleteContentForward") {
+        sendDesktop({ type: "key", key: "backspace" });
+        ev.preventDefault();
+        return;
+      }
+      if (ev.data) {
+        sendDesktop({ type: "type", text: ev.data });
+        typedFromBeforeInput = true;
+        ev.preventDefault();
+      }
+    });
+    keys.addEventListener("input", () => {
+      if (typedFromBeforeInput) {
+        typedFromBeforeInput = false;
+        keys.value = "";
+        return;
+      }
+      const text = keys.value;
+      if (!text) return;
+      sendDesktop({ type: "type", text });
+      keys.value = "";
+    });
+    keys.addEventListener("focus", () => {
+      keyboardOn = true;
+      btnKeys.classList.add("active");
+      desktopHint();
+    });
+    keys.addEventListener("blur", () => {
+      btnKeys.classList.toggle("active", keyboardOn);
+      if (!keyboardOn) desktopHint();
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitViewport);
+      window.visualViewport.addEventListener("scroll", fitViewport);
+      fitViewport();
+    }
+
+    connectDesktop();
+  </script>
+</body>
+</html>

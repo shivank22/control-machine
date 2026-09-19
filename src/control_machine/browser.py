@@ -16,6 +16,7 @@ import asyncio
 import base64
 import contextlib
 import io
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,8 @@ from PIL import Image, ImageDraw, ImageFont
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
 
 from .config import get_settings
+
+log = logging.getLogger(__name__)
 
 # Refs are "e12" on the main frame and "f1e12" inside an iframe.
 _REF_PATTERN = r"(?:f\d+)?e\d+"
@@ -129,6 +132,7 @@ class BrowserSession:
                 no_defaults=True,
             )
         except Exception as exc:  # noqa: BLE001 - surfaced to the model as guidance
+            log.exception("CDP attach failed for %s", self._endpoint)
             raise BrowserError(
                 f"Could not attach to Chrome at {self._endpoint}. "
                 "Start the browser containers with "
@@ -411,6 +415,7 @@ class BrowserPool:
         try:
             await slot.session.start()
         except Exception:
+            log.exception("Slot %s failed to start for task %s", slot.id, task_id)
             slot.task_id = None
             self._available.put_nowait(slot)
             raise
@@ -428,6 +433,7 @@ class BrowserPool:
         try:
             await slot.session.reset()
         except Exception:  # noqa: BLE001 - a reconnect on the next lease is sufficient
+            log.exception("Slot %s reset failed; closing the CDP session", slot.id)
             await slot.session.close()
         slot.task_id = None
         slot.held_thread_id = None

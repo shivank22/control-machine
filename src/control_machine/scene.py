@@ -7,12 +7,15 @@ often keep acting as if they were still on that earlier screen.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from playwright.async_api import Error as PlaywrightError
 
 from .browser import BrowserError, BrowserSession
 from .tools import VisionBuffer
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,6 +52,7 @@ class SceneCallback:
         try:
             observation = await self.session.observation(note)
         except (BrowserError, PlaywrightError) as exc:
+            log.warning("Scene observation failed: %s", exc)
             observation = f"{note}\n\n(Could not read the page: {exc})"
 
         try:
@@ -62,6 +66,7 @@ class SceneCallback:
                 path,
             )
         except (BrowserError, PlaywrightError):
+            log.warning("Scene screenshot failed after user intervention", exc_info=True)
             self.vision.clear()
 
         self._pending = (

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import re
 import time
 import uuid
@@ -22,6 +23,9 @@ from .db import Database
 from .events import EventBus
 from .scene import SceneCallback
 from .tools import VisionBuffer
+from .tracing import task_tracer
+
+log = logging.getLogger(__name__)
 
 _SCREENSHOT_RE = re.compile(r"\[screenshot: ([^\]]+)\]")
 
@@ -102,6 +106,16 @@ class RunManager:
             "idle": True,
         }
 
+    def slot_for_task(self, task: dict[str, Any]) -> BrowserSlot | None:
+        task_id = int(task["id"])
+        run = self._runs.get(task_id)
+        if run is not None:
+            return run.slot
+        lease = self._sticky.get(str(task["thread_id"]))
+        if lease is not None:
+            return lease.slot
+        return None
+
     # ----------------------------------------------------------------- control
 
     def automation_is_running(self, automation_id: int) -> bool:
@@ -173,6 +187,7 @@ class RunManager:
                     preferred_slot_id=preferred_slot_id,
                 )
             except Exception as exc:
+                log.exception("Could not start task %s", task["id"])
                 await self.db.finish_task(
                     task["id"], status="error", error=f"Browser unavailable: {exc}"
                 )
@@ -218,6 +233,15 @@ class RunManager:
         await self.db.set_task_status(task_id, "paused")
         self._emit(task_id, {"type": "status", "status": "paused"})
         self._emit_typing(task_id, "⏸️", "Paused")
+
+    async def pause_for_live(self, task_id: int) -> None:
+        """Pause only when the agent is still issuing tools, so a human can type."""
+        run = self._runs.get(task_id)
+        if run is None:
+            return
+        if run.job is None or run.job.done() or not run.running.is_set():
+            return
+        await self.pause(task_id)
 
     async def resume(self, task_id: int) -> None:
         run = self._require_run(task_id)
@@ -279,6 +303,7 @@ class RunManager:
                 settings=self.settings,
             )
         except Exception:
+            log.exception("Could not build agent for task %s on slot %s", task_id, slot.id)
             await self.pool.release(slot)
             raise
         await self.db.set_task_slot(task_id, slot.id)
@@ -313,11 +338,27 @@ class RunManager:
 
     async def _run(self, run: Run, payload: Any) -> None:
         task_id = int(run.task["id"])
+        thread_id = str(run.task["thread_id"])
+        tracer = task_tracer(self.settings, task_id=task_id, thread_id=thread_id)
         config = {
-            "configurable": {"thread_id": run.task["thread_id"]},
+            "configurable": {"thread_id": thread_id},
             # Two graph steps per tool call, plus headroom for planning turns.
             "recursion_limit": max(10, self.settings.max_steps * 2),
+            "callbacks": [tracer],
+            "metadata": {
+                "task_id": task_id,
+                "thread_id": thread_id,
+                "slot_id": run.slot.id,
+            },
+            "tags": [f"task:{task_id}", f"slot:{run.slot.id}"],
         }
+        log.info(
+            "Task %s starting thread=%s slot=%s trace=%s",
+            task_id,
+            thread_id,
+            run.slot.id,
+            self.settings.traces_dir / f"task-{task_id}.jsonl",
+        )
         self._emit(task_id, {"type": "status", "status": "running"})
         self._emit_typing(task_id, "✍️", "Thinking")
         terminal = True
@@ -327,14 +368,18 @@ class RunManager:
             interrupted = await self._consume_with_active_timeout(run, payload, config)
             if interrupted:
                 terminal = False
+                log.info("Task %s interrupted (waiting for human)", task_id)
         except TimeoutError:
+            log.error("Task %s timed out after %ss", task_id, self.settings.run_timeout_seconds)
             await self._fail(task_id, f"Stopped after {self.settings.run_timeout_seconds}s.")
         except asyncio.CancelledError:
             preserve = False
+            log.info("Task %s cancelled", task_id)
             await self.db.finish_task(task_id, status="cancelled", error="Cancelled.")
             self._emit(task_id, {"type": "status", "status": "cancelled"})
             raise
         except Exception as exc:  # noqa: BLE001 - the dashboard shows the message
+            log.exception("Task %s crashed", task_id)
             await self._fail(task_id, f"{type(exc).__name__}: {exc}")
         finally:
             if terminal:
@@ -431,6 +476,7 @@ class RunManager:
 
         await self.db.finish_task(task_id, status="done", result=final_text or None)
         self._emit(task_id, {"type": "status", "status": "done", "result": final_text})
+        log.info("Task %s finished (%s tool steps)", task_id, tool_steps)
         return False
 
     # ------------------------------------------------------------------ pieces
@@ -535,6 +581,7 @@ class RunManager:
         self._emit(task_id, {"type": "status", "status": "awaiting_approval"})
 
     async def _fail(self, task_id: int, message: str) -> None:
+        log.error("Task %s failed: %s", task_id, message)
         await self.db.finish_task(task_id, status="error", error=message)
         self._emit(task_id, {"type": "status", "status": "error", "error": message})
 
@@ -707,12 +754,19 @@ _TOOL_ACTIVITY: dict[str, tuple[str, str]] = {
     "browser_read_page": ("📄", "Reading the page"),
     "browser_screenshot": ("📸", "Taking a screenshot"),
     "ask_user": ("🙋", "Asking you"),
+    "fs_download": ("📁", "Downloading a file"),
+    "desktop_screenshot": ("📸", "Capturing the Mac screen"),
+    "desktop_click": ("🖱️", "Clicking the desktop"),
+    "desktop_type": ("⌨️", "Typing on the Mac"),
+    "desktop_key": ("⌨️", "Pressing a key"),
+    "app_open": ("🚀", "Opening an app"),
     "write_file": ("📁", "Writing a file"),
     "read_file": ("📁", "Reading a file"),
     "edit_file": ("📁", "Editing a file"),
     "ls": ("📁", "Listing files"),
     "glob": ("📁", "Finding files"),
     "grep": ("📁", "Searching files"),
+    "delete": ("📁", "Deleting a file"),
     "scene_refresh": ("👀", "Looking at the page"),
 }
 
@@ -775,8 +829,29 @@ def _activity_for_tool(name: str, args: dict[str, Any] | None = None) -> tuple[s
         return emoji, f"Asking: {_clip(question)}" if question else fallback
     if name in {"write_file", "read_file", "edit_file"}:
         path = str(args.get("file_path") or args.get("path") or "").strip()
-        verb = {"write_file": "Writing", "read_file": "Reading", "edit_file": "Editing"}[name]
+        verb = {
+            "write_file": "Writing",
+            "read_file": "Reading",
+            "edit_file": "Editing",
+        }[name]
         return emoji, f"{verb} {_clip(path)}" if path else fallback
+    if name == "delete":
+        path = str(args.get("file_path") or args.get("path") or "").strip()
+        return emoji, f"Deleting {_clip(path)}" if path else fallback
+    if name == "fs_download":
+        dest = str(args.get("dest") or "").strip()
+        return emoji, f"Downloading to {_clip(dest)}" if dest else fallback
+    if name == "app_open":
+        app = str(args.get("name") or "").strip()
+        return emoji, f"Opening {_clip(app)}" if app else fallback
+    if name == "desktop_click":
+        x, y = args.get("x"), args.get("y")
+        if x is not None and y is not None:
+            return emoji, f"Clicking desktop ({_number(x)}, {_number(y)})"
+        return emoji, fallback
+    if name == "desktop_type":
+        typed = _clip(str(args.get("text") or ""), 28)
+        return emoji, f"Typing “{typed}” on the Mac" if typed else fallback
     if name == "ls":
         path = str(args.get("path") or "").strip()
         return emoji, f"Listing {_clip(path)}" if path else fallback

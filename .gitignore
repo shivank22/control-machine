@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .env
 runs/
+logs/
 .ruff_cache/
 *.egg-info/
 dist/

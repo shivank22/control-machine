@@ -21,6 +21,8 @@ dependencies = [
     "python-dotenv>=1.0",
     "httpx>=0.28.1",
     "croniter>=3.0",
+    "python-telegram-bot>=21.6",
+    "websockets>=14.0",
 ]
 
 [project.scripts]

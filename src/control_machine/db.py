@@ -89,6 +89,16 @@ CREATE INDEX IF NOT EXISTS automations_due_idx ON automations (enabled, next_run
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS skill_id BIGINT REFERENCES skills (id) ON DELETE SET NULL;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS automation_id BIGINT REFERENCES automations (id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS telegram_threads (
+    chat_id       BIGINT      PRIMARY KEY,
+    thread_id     TEXT        NOT NULL,
+    last_task_id  BIGINT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS telegram_threads_task_idx ON telegram_threads (last_task_id);
+CREATE INDEX IF NOT EXISTS telegram_threads_thread_idx ON telegram_threads (thread_id);
 """
 
 
@@ -496,6 +506,66 @@ class Database:
                 """,
                 (error, disable, automation_id),
             )
+
+    # -------------------------------------------------------------- telegram
+
+    async def upsert_telegram_thread(
+        self, chat_id: int, *, thread_id: str, task_id: int
+    ) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO telegram_threads (chat_id, thread_id, last_task_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (chat_id) DO UPDATE
+                   SET thread_id = EXCLUDED.thread_id,
+                       last_task_id = EXCLUDED.last_task_id,
+                       updated_at = now()
+                """,
+                (chat_id, thread_id, task_id),
+            )
+
+    async def get_telegram_thread(self, chat_id: int) -> dict[str, Any] | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT * FROM telegram_threads WHERE chat_id = %s",
+                (chat_id,),
+            )
+            row = await cur.fetchone()
+            return _row(row) if row else None
+
+    async def clear_telegram_thread(self, chat_id: int) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "DELETE FROM telegram_threads WHERE chat_id = %s",
+                (chat_id,),
+            )
+
+    async def get_telegram_chat_for_task(self, task_id: int) -> int | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT chat_id FROM telegram_threads
+                 WHERE last_task_id = %s
+                 LIMIT 1
+                """,
+                (task_id,),
+            )
+            row = await cur.fetchone()
+            if row:
+                return int(row["chat_id"])
+            cur = await conn.execute(
+                """
+                SELECT telegram_threads.chat_id
+                  FROM telegram_threads
+                  JOIN tasks ON tasks.thread_id = telegram_threads.thread_id
+                 WHERE tasks.id = %s
+                 LIMIT 1
+                """,
+                (task_id,),
+            )
+            row = await cur.fetchone()
+            return int(row["chat_id"]) if row else None
 
 
 _TASK_COLUMNS = """

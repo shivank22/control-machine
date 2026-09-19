@@ -39,9 +39,27 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8100
+    public_base_url: str = ""
+    live_link_secret: str = ""
+    live_link_ttl_seconds: int = Field(default=86400, ge=60)
+
+    telegram_bot_token: str = ""
+    telegram_allowlist: str = ""
+    telegram_notify_chat_id: str = ""
 
     max_steps: int = 40
     run_timeout_seconds: int = 600
+
+    # Host filesystem. Empty root means the current user's home directory.
+    filesystem_root: str = ""
+    filesystem_deny: str = ""
+    filesystem_read_max_bytes: int = Field(default=256_000, ge=1024)
+    filesystem_write_max_bytes: int = Field(default=1_000_000, ge=1024)
+    filesystem_download_max_bytes: int = Field(default=20_000_000, ge=1024)
+
+    # This Mac's Screen Sharing / VNC (System Settings → Sharing).
+    desktop_vnc_host: str = "127.0.0.1"
+    desktop_vnc_port: int = Field(default=5900, ge=1, le=65535)
 
     # Comma-separated domain suffixes that need no approval. Empty means "all allowed".
     domain_allowlist: str = ""
@@ -52,9 +70,27 @@ class Settings(BaseSettings):
     screenshot_max_width: int = 900
     screenshot_quality: int = 70
 
+    # Local traces and errors. Empty log_dir means <project>/logs.
+    log_dir: str = ""
+    log_level: str = "INFO"
+
     @property
     def allowed_domains(self) -> list[str]:
         return [d.strip().lower() for d in self.domain_allowlist.split(",") if d.strip()]
+
+    @property
+    def telegram_user_ids(self) -> set[int]:
+        ids: set[int] = set()
+        for part in self.telegram_allowlist.split(","):
+            part = part.strip()
+            if part:
+                ids.add(int(part))
+        return ids
+
+    @property
+    def notify_chat_id(self) -> int | None:
+        raw = self.telegram_notify_chat_id.strip()
+        return int(raw) if raw else None
 
     @property
     def resolved_llm_provider(self) -> str:
@@ -79,6 +115,21 @@ class Settings(BaseSettings):
     def runs_dir(self) -> Path:
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         return RUNS_DIR
+
+    @property
+    def log_path(self) -> Path:
+        raw = self.log_dir.strip()
+        path = Path(raw).expanduser() if raw else PROJECT_ROOT / "logs"
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @property
+    def traces_dir(self) -> Path:
+        dest = self.log_path / "traces"
+        dest.mkdir(parents=True, exist_ok=True)
+        return dest
 
     @property
     def effective_parallel_runs(self) -> int:

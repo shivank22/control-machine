@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,7 @@ from ..browser import BrowserError, BrowserPool
 from ..config import get_settings
 from ..db import Database
 from ..events import EventBus
+from ..live import LiveSessions
 from ..runner import RunManager, RunnerBusy
 from ..scheduler import (
     SCHEDULE_PRESETS,
@@ -36,6 +38,11 @@ from ..scheduler import (
     public_automation,
     validate_cron,
 )
+from ..telegram import TelegramBridge
+from ..tracing import configure_logging
+from .live import router as live_router
+
+log = logging.getLogger(__name__)
 
 TEMPLATES = Path(__file__).parent / "templates"
 
@@ -71,6 +78,7 @@ class AutomationIn(BaseModel):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings)
     templates = Jinja2Templates(directory=str(TEMPLATES))
 
     @contextlib.asynccontextmanager
@@ -78,26 +86,55 @@ def create_app() -> FastAPI:
         db = await Database.connect()
         orphans = await db.reconcile_orphans()
         if orphans:
-            print(f"Marked {orphans} interrupted task(s) from a previous run as failed.")
+            log.warning("Marked %s interrupted task(s) from a previous run as failed.", orphans)
         pool = BrowserPool.from_settings()
         bus = EventBus()
+        live = LiveSessions(settings)
+        live_http = httpx.AsyncClient(timeout=30.0, follow_redirects=False)
         app.state.db = db
         app.state.pool = pool
         app.state.bus = bus
+        app.state.live = live
+        app.state.live_http = live_http
         app.state.runner = RunManager(db=db, pool=pool, bus=bus, settings=settings)
         scheduler = AutomationScheduler(db=db, runner=app.state.runner)
         app.state.scheduler = scheduler
+        telegram = TelegramBridge(
+            settings=settings,
+            db=db,
+            runner=app.state.runner,
+            bus=bus,
+            live=live,
+        )
+        app.state.telegram = telegram
         scheduler.start()
+        await telegram.start()
         try:
             yield
         finally:
+            await telegram.stop()
             await scheduler.close()
             await app.state.runner.close()
             await pool.close()
+            await live_http.aclose()
             await db.close()
 
     app = FastAPI(title="control-machine", lifespan=lifespan)
+    app.include_router(live_router)
     app.mount("/runs", StaticFiles(directory=str(settings.runs_dir)), name="runs")
+
+    @app.exception_handler(Exception)
+    async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+        log.error(
+            "Unhandled error on %s %s",
+            request.method,
+            request.url.path,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"{type(exc).__name__}: {exc}"},
+        )
 
     # ----------------------------------------------------------------- pages
 
