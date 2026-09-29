@@ -27,7 +27,7 @@ from ..browser import BrowserError, BrowserPool
 from ..config import get_settings
 from ..db import Database
 from ..events import EventBus
-from ..live import LiveSessions
+from ..live import LiveSessions, open_live_session
 from ..runner import RunManager, RunnerBusy
 from ..scheduler import (
     SCHEDULE_PRESETS,
@@ -97,6 +97,17 @@ def create_app() -> FastAPI:
         app.state.live = live
         app.state.live_http = live_http
         app.state.runner = RunManager(db=db, pool=pool, bus=bus, settings=settings)
+
+        async def _mint_live(task_id: int) -> str:
+            session = await open_live_session(
+                task_id,
+                runner=app.state.runner,
+                db=db,
+                sessions=live,
+            )
+            return str(session["url"])
+
+        app.state.runner.bind_live_opener(_mint_live)
         scheduler = AutomationScheduler(db=db, runner=app.state.runner)
         app.state.scheduler = scheduler
         telegram = TelegramBridge(

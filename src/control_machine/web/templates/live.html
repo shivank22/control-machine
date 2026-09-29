@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Live desktop</title>
   <style>
@@ -14,11 +14,11 @@
       background: #12151c; border-bottom: 1px solid #2a3140; flex: none;
       flex-wrap: wrap;
     }
-    #bar button {
+    #bar button, #btn-keys {
       appearance: none; border: 1px solid #3d4658; background: #1b2230; color: #e8eaed;
       border-radius: 8px; padding: 8px 10px; font-size: 14px;
     }
-    #bar button.active { border-color: #7cb7ff; color: #7cb7ff; }
+    #bar button.active, #btn-keys.active { border-color: #7cb7ff; color: #7cb7ff; }
     #screen {
       flex: 1; min-height: 0; background: #000; overflow: auto;
       position: relative;
@@ -30,25 +30,40 @@
       border: 2px solid #7cb7ff; border-radius: 50%; pointer-events: none;
       opacity: 0; transition: opacity 0.4s;
     }
-    #keys {
+    #composer {
       position: fixed;
       left: 0;
       right: 0;
       bottom: 0;
-      width: 100%;
-      height: 32px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: #12151c;
+      border-top: 1px solid #2a3140;
+    }
+    #composer.off { display: none; }
+    #keys {
+      flex: 1;
+      min-width: 0;
+      height: 44px;
       margin: 0;
-      padding: 0;
-      opacity: 0.05;
-      color: transparent;
-      caret-color: transparent;
-      background: transparent;
-      border: 0;
+      padding: 10px 12px;
+      color: #e8eaed;
+      caret-color: #7cb7ff;
+      background: #1b2230;
+      border: 1px solid #7cb7ff;
+      border-radius: 8px;
       resize: none;
       font-size: 16px;
-      pointer-events: none;
-      z-index: 5;
+      line-height: 22px;
     }
+    #btn-hide {
+      appearance: none; border: 1px solid #3d4658; background: #1b2230; color: #e8eaed;
+      border-radius: 8px; padding: 10px 12px; font-size: 14px; flex: none;
+    }
+    #btn-keys { cursor: pointer; }
     #status { font-size: 12px; color: #9aa3b2; padding: 0 10px 8px; }
     #help { font-size: 13px; color: #c5cad3; padding: 16px; line-height: 1.45; }
     main { display: flex; flex-direction: column; height: 100%; }
@@ -64,7 +79,7 @@
       <button type="button" id="btn-menu">Menu</button>
       <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
       <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
-      <button type="button" id="btn-keys">Keyboard</button>
+      <label id="btn-keys" for="keys">Keyboard</label>
     </div>
     <div id="status">Connecting…</div>
     <div id="screen">
@@ -73,17 +88,21 @@
     </div>
     <div id="help" class="hidden"></div>
   </main>
-  <textarea
-    id="keys"
-    autocomplete="off"
-    autocorrect="off"
-    autocapitalize="none"
-    spellcheck="false"
-    enterkeyhint="enter"
-    inputmode="text"
-    rows="1"
-    aria-label="Type on this Mac"
-  ></textarea>
+  <div id="composer">
+    <textarea
+      id="keys"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="none"
+      spellcheck="false"
+      enterkeyhint="enter"
+      inputmode="text"
+      rows="1"
+      placeholder="Tap here and type"
+      aria-label="Type on this Mac"
+    ></textarea>
+    <button type="button" id="btn-hide">Hide</button>
+  </div>
   <script>
     const TOKEN = {{ token | tojson }};
     const DESKTOP_PATH = {{ desktop_ws_path | tojson }};
@@ -94,9 +113,11 @@
     const help = document.getElementById("help");
     const screen = document.getElementById("screen");
     const frame = document.getElementById("frame");
+    const composer = document.getElementById("composer");
     const keys = document.getElementById("keys");
     const dot = document.getElementById("dot");
     const btnKeys = document.getElementById("btn-keys");
+    const btnHide = document.getElementById("btn-hide");
     const btnPage1 = document.getElementById("btn-page-1");
     const btnPage2 = document.getElementById("btn-page-2");
     const btnApps = document.getElementById("btn-apps");
@@ -125,7 +146,7 @@
     }
     function desktopHint() {
       if (keyboardOn) {
-        setStatus("Typing on this Mac — tap Keyboard to hide");
+        setStatus("Tap the field, then type. Hide closes the keyboard.");
       } else {
         setStatus("Screen " + page + " — tap to click. Apps shows windows. Menu opens the menu bar.");
       }
@@ -134,23 +155,30 @@
     function fitViewport() {
       const vv = window.visualViewport;
       if (!vv) return;
+      const keyboardInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       main.style.transform = "translateY(" + vv.offsetTop + "px)";
-      main.style.height = vv.height + "px";
+      main.style.height = Math.max(0, vv.height - (composer.classList.contains("off") ? 0 : composer.offsetHeight)) + "px";
+      composer.style.bottom = keyboardInset + "px";
     }
 
     function openKeyboard() {
       keyboardOn = true;
+      composer.classList.remove("off");
       btnKeys.classList.add("active");
       keys.value = "";
-      keys.focus({ preventScroll: true });
+      keys.focus();
       desktopHint();
+      fitViewport();
     }
 
     function closeKeyboard() {
       keyboardOn = false;
+      composer.classList.add("off");
       btnKeys.classList.remove("active");
       keys.blur();
+      composer.style.bottom = "0px";
       desktopHint();
+      fitViewport();
     }
 
     function stopAll() {
@@ -224,7 +252,6 @@
       if (ev.pointerType === "touch") return;
       sendClick(ev.clientX, ev.clientY);
       ev.preventDefault();
-      openKeyboard();
     }
 
     frame.addEventListener("pointerdown", onPointerDown);
@@ -263,7 +290,6 @@
         const t = ev.changedTouches[0];
         if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) <= 12) {
           sendClick(t.clientX, t.clientY);
-          openKeyboard();
         }
       }
       pinching = ev.touches.length > 1;
@@ -307,11 +333,10 @@
       if (on) btnApps.classList.remove("active");
       setStatus(on ? "Apple menu — tap an item, or Menu to close" : "Menu closed");
     });
-    btnKeys.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      if (keyboardOn && document.activeElement === keys) closeKeyboard();
-      else openKeyboard();
+    btnKeys.addEventListener("click", () => {
+      openKeyboard();
     });
+    btnHide.addEventListener("click", () => closeKeyboard());
 
     keys.addEventListener("keydown", (ev) => {
       const named = { Backspace: "backspace", Enter: "return", Tab: "tab", Escape: "escape" };
@@ -362,8 +387,8 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", fitViewport);
       window.visualViewport.addEventListener("scroll", fitViewport);
-      fitViewport();
     }
+    fitViewport();
 
     connectDesktop();
   </script>

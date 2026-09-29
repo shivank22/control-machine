@@ -1,0 +1,93 @@
+{
+  "title": "Computer Bot",
+  "subtitle": "Computer Bot automates the browser, your files, and the desktop. You ask from the tools you already like, and a live link brings you in when a step needs you.",
+  "author": "Shivank.sharma@wipro.com",
+  "footer": "AI-Council Switzerland",
+  "index_intro": "Computer Bot is agentic automation for one computer. A supervisor agent takes the request. Specialist agents carry out the browser, file, and desktop work. You stay in the chat you already use, and you take the screen only when a step needs you. The pages below cover how that handoff works, who it is for, and why adding skills makes the same agents more useful. Read it as the map of one product: agents, automation, and a live link back to you. Start with the introduction for the agent loop, or with future enhancements for how the advantage grows.",
+  "sections": [
+    {
+      "heading": "Introduction",
+      "index": "What the supervisor and specialist agents automate, and the moment they hand the screen back to you.",
+      "body": [
+        "Computer Bot puts agents on the computer you already have. You describe the job in plain language. A supervisor agent accepts that request and hands the work to specialist agents. Those agents automate the browser, your files, and the desktop apps you already use.",
+        "The conversation happens in Telegram. The supervisor is the only agent you talk to. Behind it, a browser agent drives Chrome, and file and desktop agents work on documents and native apps. A skill is a named routine, such as filling a MyWipro timesheet: the supervisor starts it, and the browser agent follows the steps.",
+        "Automation pauses when a step needs a person. A login, a one-time code, or an approval is that kind of step. The browser agent stops. The supervisor sends a private live link. You open it on your phone, see the real screen, and type or click. You then tell the agents to continue, and they pick up from the page already open.",
+        "The computer stays yours. The browser and the remote-control ports listen only on this machine. The link you receive is a signed page on the dashboard. Agents do the screen work. You step in for the moments that should stay with a person.",
+        "This is automation with a person still in the loop. The agents move through pages, files, and apps on their own. They stop when the next action is a login, a code, or an approval. After you finish that step on the live link, the same agents continue. The chat stays the record of what was asked and what was done.",
+        "A typical job looks like this. You name the task in Telegram, including the period, the project, or the file if those details matter. The supervisor agent matches a skill or writes a clear task for a specialist. The specialist agent works on the screen. If it needs you, you get the live link, finish that moment, and reply in chat. The agents then complete the job and the supervisor reports what happened."
+      ]
+    },
+    {
+      "heading": "Core Features and Infra",
+      "index": "The supervisor, the browser agent, the file and desktop agents, the live link, and the services on this computer.",
+      "body": [
+        "You message one supervisor agent. It chooses the specialist, starts the automation, and answers you with the result.",
+        "- Telegram is the remote control. From a chat you start a job, approve a step, or ask the supervisor to open the live desktop.",
+        "- The supervisor agent routes browser work, files, and desktop apps. When the job matches a skill, it reads that skill and starts it.",
+        "- The browser agent automates Chrome. It reads the page, clicks and types through element refs, and follows the browser skill for that job.",
+        "- File and desktop agents automate documents on this computer and the native apps already installed on it.",
+        "- The live link is the handoff. You see the screen and type from your phone while the agents wait.",
+        "- Postgres stores the conversation, checkpoints, and memory. Chrome profiles stay in Docker so a login survives a restart.",
+        "- The model behind the agents is the one you configure, such as OpenAI or a local Ollama model."
+      ]
+    },
+    {
+      "heading": "Key Business Benefits",
+      "index": "Why agentic automation on your own computer is an advantage over doing every click yourself.",
+      "body": [
+        "The advantage is practical. The agents work inside the tools you already trust, and you keep the decisions that should stay human.",
+        "- Agents take the repetitive screen work. You can start that automation from your phone, away from the desk.",
+        "- You keep the sites and desktop apps you prefer. Automation runs inside them, so there is no new suite to learn.",
+        "- You stay in the loop for logins, codes, and approvals. The agent pauses and hands you the screen.",
+        "- A skill turns a repeated job into a routine the supervisor can start again, with the same handoff when you are needed.",
+        "- Files and the browser stay on your machine. Secrets such as SSH keys and environment files stay blocked from the agents.",
+        "That combination is the product. The agents run the long stretch of clicks. The live link covers the step that has to be yours. You get the result in the same chat that started the job, so the automation is visible from start to finish.",
+        "The advantage shows up on repeated work. A timesheet, a form, a file tidy-up: the first run teaches the handoff, and the skill lets the supervisor start the same automation again. You still approve what must be approved. The agents redo the rest.",
+        "Reach matters as much as the clicks. The computer can be at home while you are somewhere else. Telegram starts the agents. The live link is the screen in your pocket. Automation keeps going after you leave the chat, and it calls you back only for the step with your name on it."
+      ]
+    },
+    {
+      "heading": "Target Audience of Product",
+      "index": "Anyone who wants agents to run jobs on the computer they already have, from the phone they already carry.",
+      "body": [
+        "Computer Bot is for anyone who wants their own computer available from everyday tools, with agents doing the screen work.",
+        "- People who want to assign a job to an agent and get the result in chat.",
+        "- People who live in Telegram and want to start that automation while they are away from the desk.",
+        "- Anyone who uses a browser and desktop apps they already like, and wants agents to operate those same tools.",
+        "- Operators who must approve a login or a submit themselves, then let the automation continue.",
+        "- Someone running one Mac for personal work, timesheets, research, or file tasks, with a phone as the remote.",
+        "The audience is broad because the tools stay familiar. Telegram, a normal browser, and the desktop apps already on the machine are the interface. The agents are the new part.",
+        "It also fits someone who wants automation while the computer stays theirs. The agents act on this Mac. The signed live link is how you watch and correct them. If you already trust your own browser and your own files, you can let agents use them and still see every handoff.",
+        "Teams can share the idea even when each person runs their own machine. The favorite chat, the favorite browser, and the apps already installed become the surface the agents operate. The work stays in those tools. The agents come to the computer, and the automation starts from a message.",
+        "If you can describe the job in a sentence, you can hand it to the supervisor agent. The specialists then do the part that used to mean sitting at the keyboard."
+      ]
+    },
+    {
+      "heading": "Conclusion",
+      "index": "One conversation, specialist agents doing the screen work, and a live link when the job needs you.",
+      "body": [
+        "Computer Bot connects the chat you already use to the computer you already have. A supervisor agent hears the request. Specialist agents automate the browser, the files, and the desktop. You step in through a live link only when the task needs you, then let them finish.",
+        "The loop is simple to live with. You ask. The agents act. If a login or an approval appears, you get the screen on your phone, complete that step, and send the agents onward. The page stays open, so the automation continues from the work you just did.",
+        "That is a computer you can reach anytime, run by agents, still under your hand for the steps that matter. The tools stay the ones you chose. The agents take the screen work in between.",
+        "Three agents make the automation concrete. The supervisor agent is the one in the chat: it reads the request, picks a skill, and calls a specialist. The browser agent is the one in Chrome: it reads the page and carries out the clicks. The file and desktop agents are the ones on the rest of the machine: documents and native apps.",
+        "You talk to all of them the same way. One message starts the job. The live link is there when the agents need a person. Done comes back in Telegram. That is the whole product: agents on your computer, automation you can see, and a way to step in from your phone.",
+        "Use it when the work is on the screen and you are somewhere else. Ask the agents. Let them automate what they can. Take the keyboard through the live link when they reach a step that belongs to you. Then let them finish, and read the result in the same chat.",
+        "The agents are the workers. The automation is the job they repeat. The live link is how you stay the person in charge. Together they make the computer available whenever you can send a message."
+      ]
+    },
+    {
+      "heading": "Future Enhancements",
+      "index": "Why the advantage grows as more skills and specialist agents are added to the same chat.",
+      "body": [
+        "The large advantage is that every enhancement shows up in the same conversation. You keep Telegram, the live link, and the computer. A new capability is another skill or another specialist, not a new product to install.",
+        "Each skill is a finished piece of automation. The timesheet skill is the pattern: the supervisor knows when to start it, the browser agent knows how to move through the site, and the handoff tells you when to log in or approve. The next skill \u2014 another site, another weekly job, another form \u2014 reuses that same pattern. You ask in chat. The agents do the screen work. You take over only for the human step.",
+        "- More skills mean more jobs you can start with one message, on the computer you already use.",
+        "- More specialist agents can cover more apps, while you still talk to one supervisor.",
+        "- Memory already stored in Postgres lets a later run start closer to done, because the agents can recall the earlier conversation.",
+        "- The live link keeps that growth safe. Sensitive steps stay with you, so the automation can take on real work rather than only public pages.",
+        "This is the leverage. The platform is stable: one supervisor, specialist agents, your own screen, and a phone when you are needed. What grows is the catalog of jobs those agents can run. The advantage compounds with every skill you add, because the way you ask does not change and the software already on the machine becomes something an agent can operate.",
+        "The huge advantage is cumulative. Each new skill is another automated job on the same computer, started from the same chat, with the same handoff when a human step appears. The agents get more useful while you keep working the way you already do. Screen control and a pause for the human step stay together, and both get more valuable as the catalog of skills grows."
+      ]
+    }
+  ]
+}

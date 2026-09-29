@@ -134,6 +134,10 @@ def build_agent_backend(settings: Settings) -> CompositeBackend:
         routes={
             f"{HOME_MOUNT}/": host,
             "/memories/": StoreBackend(namespace=lambda _rt: ("memories",)),
+            "/skills/": FilesystemBackend(
+                root_dir=PROJECT_ROOT / "skills",
+                virtual_mode=True,
+            ),
         },
     )
 

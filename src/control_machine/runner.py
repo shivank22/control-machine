@@ -8,6 +8,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,11 @@ class RunManager:
         self._sticky: dict[str, StickyLease] = {}
         self._last_typing: dict[int, tuple[str, str, str]] = {}
         self._lock = asyncio.Lock()
+        self._live_opener: Callable[[int], Awaitable[str]] | None = None
+
+    def bind_live_opener(self, opener: Callable[[int], Awaitable[str]]) -> None:
+        """Mint a signed live URL for the task the supervisor is running."""
+        self._live_opener = opener
 
     # ------------------------------------------------------------------ state
 
@@ -293,6 +299,13 @@ class RunManager:
             scene = SceneCallback(session=slot.session, vision=vision)
             running = asyncio.Event()
             running.set()
+            task_id_for_link = task_id
+
+            async def _open_live() -> str:
+                if self._live_opener is None:
+                    return "Live desktop is not configured."
+                return await self._live_opener(task_id_for_link)
+
             agent = build_agent(
                 session=slot.session,
                 vision=vision,
@@ -301,6 +314,7 @@ class RunManager:
                 store=self.db.store,
                 running=running,
                 settings=self.settings,
+                open_live=_open_live,
             )
         except Exception:
             log.exception("Could not build agent for task %s on slot %s", task_id, slot.id)
@@ -417,14 +431,21 @@ class RunManager:
         tool_steps = 0
         interrupted = False
 
-        async for mode, chunk in run.agent.astream(
-            payload, config, stream_mode=["updates", "messages", "tasks"]
+        async for namespace, mode, chunk in run.agent.astream(
+            payload,
+            config,
+            stream_mode=["updates", "messages", "tasks"],
+            subgraphs=True,
         ):
+            # Empty namespace is the supervisor. Specialist graphs are nested.
+            from_supervisor = not namespace
             if mode == "tasks":
                 self._on_task_event(task_id, chunk, pending_calls)
                 continue
 
             if mode == "messages":
+                if not from_supervisor:
+                    continue
                 message, meta = chunk
                 text = getattr(message, "text", None)
                 node = str(meta.get("langgraph_node") or "")
@@ -452,7 +473,7 @@ class RunManager:
                             name, args = _tool_call_parts(message.tool_calls[0])
                             self._emit_tool_activity(task_id, name, args)
                         text = _plain_text(message)
-                        if text and not message.tool_calls:
+                        if text and not message.tool_calls and from_supervisor:
                             final_text = text
                             self._emit(
                                 task_id, {"type": "message", "role": "assistant", "text": text}
@@ -754,6 +775,8 @@ _TOOL_ACTIVITY: dict[str, tuple[str, str]] = {
     "browser_read_page": ("📄", "Reading the page"),
     "browser_screenshot": ("📸", "Taking a screenshot"),
     "ask_user": ("🙋", "Asking you"),
+    "task": ("🔀", "Delegating"),
+    "open_live_desktop": ("🖥️", "Opening the live desktop"),
     "fs_download": ("📁", "Downloading a file"),
     "desktop_screenshot": ("📸", "Capturing the Mac screen"),
     "desktop_click": ("🖱️", "Clicking the desktop"),

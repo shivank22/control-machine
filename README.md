@@ -4,6 +4,11 @@ A LangGraph Deep Agent that drives this Mac from Telegram (and a local dashboard
 Chrome over CDP, host files under the current user's home, and a live desktop view for
 logins. Postgres stores checkpoints and long-term memory.
 
+Telegram talks to one supervisor Deep Agent. It delegates to three isolated specialists.
+The browser specialist is itself a Deep Agent, so it can load its own skills. The file
+and desktop specialists stay plain agents. The supervisor does not see their page
+snapshots or file reads. Ask for a link and it mints the same signed live desktop as `/watch`.
+
 ## How it controls the browser
 
 Snapshot-first, vision second. The agent acts on Playwright's AI-mode ARIA snapshot, where
@@ -19,12 +24,13 @@ exists but requires human approval.
 
 ## Files and desktop
 
-The same agent can list, read, write, and download files under your home directory
+The file specialist can list, read, write, and download files under your home directory
 (`FILESYSTEM_ROOT`, default `~`), mounted at `/home` for Deep Agents' built-in file
 tools. Secrets such as `~/.ssh`, keychains, and `.env` are blocked. Deletes and
-overwrites of existing files ask for approval in Telegram.
+overwrites of existing files ask for approval in Telegram. The browser and desktop
+specialists cannot read or write that mount.
 
-Native apps use `app_open`, `desktop_screenshot`, `desktop_click`, and `desktop_type`. Grant
+The desktop specialist uses `app_open`, `desktop_screenshot`, `desktop_click`, and `desktop_type`. Grant
 **Screen Recording** and **Accessibility** to the process that runs `control-machine`.
 
 ## Setup
@@ -180,7 +186,7 @@ Screenshots and images are stripped from traces. Set `LOG_LEVEL=DEBUG` for more 
 | `src/control_machine/tools/fs_tools.py` | `fs_download` onto this Mac |
 | `src/control_machine/tools/desktop_tools.py` | Screenshot, click, type, open apps |
 | `src/control_machine/tools/browser_tools.py` | The curated browser tool surface |
-| `src/control_machine/agent.py` | Deep Agent wiring, model, prompt, HITL gates |
+| `src/control_machine/agent.py` | Supervisor plus browser, file, and desktop subagents |
 | `src/control_machine/runner.py` | Run loop, step persistence, event streaming |
 | `src/control_machine/scheduler.py` | Cron helpers and the loop that fires due automations |
 | `src/control_machine/live.py` | Signed live-desktop sessions and minting |
