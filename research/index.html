@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office — Control Machine</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body class="is-online">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4"><path d="M12 3l1.6 4.8L18.5 9.5 13.6 11.1 12 16l-1.6-4.9L6 9.5l4.4-1.7z"/></svg>
+        </span>
+        <div class="brand-name">Control Machine</div>
+      </div>
+      <button class="workspace" type="button">
+        <span class="ws-dot">M</span>
+        <span>This Mac</span>
+        <small>▾</small>
+      </button>
+      <button class="nav-link" data-view="factory" data-nav="factory" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/><path d="M9 10h.01M15 10h.01"/></svg>Factory</button>
+      <button class="nav-link is-here" data-view="builder" data-nav="builder" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3"/><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M2 12h2M20 12h2M9 12h.01M15 12h.01"/></svg>Agent</button>
+      <button class="nav-link" data-view="skills" data-nav="skills" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Skills</button>
+      <button class="nav-link" data-view="memory" data-nav="memory" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.6 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.6 1.5"/><path d="M20 17.5A4 4 0 1 1 12 18a4 4 0 1 1-8-.5"/></svg>Memory</button>
+      <button class="nav-link" data-view="machine" data-nav="machine" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>Connections</button>
+      <button class="nav-link" data-view="activity" data-nav="activity" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-2.5a2 2 0 0 0-1.9 1.5l-2.4 8.3a.25.25 0 0 1-.48 0L9.2 2.2a.25.25 0 0 0-.48 0L6.4 10.5A2 2 0 0 1 4.5 12H2"/></svg>Activity</button>
+      <button class="nav-link" data-view="pause" data-nav="pause" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Pause <span class="badge" id="pause-badge">1</span></button>
+      <div class="nav-label">Agents</div>
+      <div id="recent-list">
+        <button class="recent is-here" data-agent="office" type="button"><i></i> Office</button>
+        <button class="recent" data-agent="sales" type="button"><i></i> Sales</button>
+        <button class="recent" data-agent="coder" type="button"><i></i> Coder</button>
+      </div>
+      <div class="sidebar-foot">
+        <div class="side-status">
+          <i class="led"></i>
+          <div>
+            <b id="side-label">Computer online</b>
+            Heartbeat 12s ago
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="workspace-col">
+      <header class="topbar">
+        <div class="crumb"><span id="crumb-section">Agent</span> <span>/</span> <strong id="crumb-name">Office</strong></div>
+        <div class="topbar-spacer"></div>
+        <button class="icon-quiet" type="button" title="Pause" data-view="pause">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+        </button>
+        <span class="avatar">S</span>
+      </header>
+
+      <div class="page">
+        <div id="agent-chrome">
+        <div class="agent-head">
+          <div class="agent-avatar" id="agent-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3"/><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 12h.01M15 12h.01"/></svg>
+          </div>
+          <div>
+            <h1><span id="agent-name">Office</span> <button type="button" aria-label="Rename">✎</button></h1>
+            <p id="agent-desc">One agent, one Telegram bot. It chats and remembers while this Mac is off, and it works on the computer only when the connector is dialed out.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn" type="button" id="save">Save</button>
+            <a class="btn" href="chat.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Test</a>
+            <a class="btn primary" href="desktop.html">Open desktop</a>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button type="button" data-view="builder" class="is-here">Builder</button>
+          <button type="button" data-view="memory">Memory</button>
+          <button type="button" data-view="skills">Skills</button>
+          <button type="button" data-view="activity">Activity</button>
+          <button type="button" data-view="pause">Pause</button>
+          <button type="button" data-view="machine">Machine</button>
+        </div>
+        </div>
+
+        <section id="view-factory" hidden>
+          <div class="factory-head">
+            <div>
+              <h1>Factory</h1>
+              <p>Every agent has its own bot. Open one to work on it in the Agent section.</p>
+            </div>
+            <button class="btn primary" type="button" id="new-agent">+ New agent</button>
+          </div>
+          <div class="panel" id="new-agent-form" hidden style="min-height:0;padding:16px">
+            <h2 style="margin:0 0 10px">New agent</h2>
+            <label class="field"><span>Name</span><input id="new-agent-name" placeholder="Support"></label>
+            <label class="field" style="margin-top:10px"><span>What it does</span><input id="new-agent-job" placeholder="Answers the inbox and asks before it sends"></label>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="btn primary" type="button" id="create-agent">Create</button>
+              <button class="btn" type="button" id="cancel-agent">Cancel</button>
+            </div>
+          </div>
+          <div class="factory-grid" id="factory-grid">
+            <button class="agent-card" type="button" data-agent="office">
+              <span class="mark" style="background:#f3f0ff;color:#6d4dff">O</span>
+              <h2>Office</h2>
+              <p class="desc">Fills the timesheet and other desk work. One Telegram bot.</p>
+              <div class="meta"><span class="pill wait">Paused</span><span class="tag">timesheet</span></div>
+              <span class="open">Open agent</span>
+            </button>
+            <button class="agent-card" type="button" data-agent="sales">
+              <span class="mark" style="background:#eff6ff;color:#2563eb">S</span>
+              <h2>Sales</h2>
+              <p class="desc">Works the pipeline in the browser. Drafts the note, then waits before it sends.</p>
+              <div class="meta"><span class="pill off">Idle</span><span class="tag">pipeline</span></div>
+              <span class="open">Open agent</span>
+            </button>
+            <button class="agent-card" type="button" data-agent="coder">
+              <span class="mark" style="background:#ecfdf3;color:#15945a">C</span>
+              <h2>Coder</h2>
+              <p class="desc">Reads the repo on this Mac. Asks before it writes or runs anything.</p>
+              <div class="meta"><span class="pill off">Idle</span><span class="tag">repo</span></div>
+              <span class="open">Open agent</span>
+            </button>
+          </div>
+        </section>
+
+        <section id="view-builder">
+          <div class="runbar" id="runbar">
+            <span id="runbar-title">Paused · Fill this week’s MyWipro timesheet</span>
+            <span id="runbar-detail">Sign-in is on the page. The reply goes back to Telegram.</span>
+            <button class="btn" type="button" data-view="pause">Review pause</button>
+          </div>
+          <div class="builder">
+            <div class="canvas-card">
+              <div class="canvas-bar">
+                <div>
+                  <h2>Agent workflow</h2>
+                  <p id="flow-caption">How Office handles a message. One intent at a time once it reaches the computer.</p>
+                </div>
+                <div class="canvas-actions">
+                  <button class="btn" type="button">Templates</button>
+                  <button class="btn primary" type="button" id="add-node">+ Add node</button>
+                </div>
+              </div>
+              <div class="canvas">
+                <div class="menu" id="add-menu" hidden>
+                  <button type="button" data-select="browser"><strong>Browser</strong><em>Read the page, then act on refs</em></button>
+                  <button type="button" data-select="clicks"><strong>Machine clicks</strong><em>Screenshot, click, and type</em></button>
+                  <button type="button" data-select="pause"><strong>Pause</strong><em>Wait for a reply in the chat</em></button>
+                  <button type="button" data-select="skill"><strong>Skill</strong><em>Instructions written for this agent</em></button>
+                </div>
+                <div class="flow">
+                  <button class="node" type="button" data-select="trigger">
+                    <span class="check">✓</span>
+                    <span class="node-ico green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span>
+                    <span><h3>Trigger</h3><p>Telegram message</p></span>
+                  </button>
+                  <div class="wire"></div>
+                  <button class="node selected" type="button" data-select="agent">
+                    <span class="check">✓</span>
+                    <span class="node-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12H6M18 12h3"/><circle cx="12" cy="12" r="3"/></svg></span>
+                    <span><h3 id="node-agent-name">Office</h3><p id="node-agent-blurb">Decide. Refuse if offline.</p></span>
+                  </button>
+                  <div class="wire"></div>
+                  <div class="branch">
+                    <div class="bracket"></div>
+                    <div class="stack">
+                      <button class="node" type="button" data-select="memory">
+                        <span class="check">✓</span>
+                        <span class="node-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 18V5"/><path d="M15 13a4 4 0 0 1-3-4 4 4 0 0 1-3 4"/></svg></span>
+                        <span><h3>Memory</h3><p>This agent only</p></span>
+                      </button>
+                      <button class="node" type="button" data-select="skill">
+                        <span class="check">✓</span>
+                        <span class="node-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></svg></span>
+                        <span><h3 id="node-skill-name">Timesheet</h3><p id="node-skill-blurb">Follow the skill</p></span>
+                      </button>
+                      <button class="node" type="button" data-select="pause">
+                        <span class="check wait" id="pause-mark">!</span>
+                        <span class="node-ico amber"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg></span>
+                        <span><h3>Pause</h3><p id="node-pause-blurb">Waiting on sign-in</p></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="wire"></div>
+                  <button class="node" type="button" data-select="end">
+                    <span class="check">✓</span>
+                    <span class="node-ico slate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg></span>
+                    <span><h3>Reply</h3><p>Same Telegram chat</p></span>
+                  </button>
+                </div>
+                <div class="zoom">
+                  <button type="button" aria-label="Zoom out">−</button>
+                  <button type="button" aria-label="Zoom in">+</button>
+                  <button type="button" aria-label="Fit">⤢</button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel inspector">
+              <div class="inspector-tabs">
+                <button type="button" class="is-here" data-inspector="details">Agent details</button>
+                <button type="button" data-inspector="prompt">System prompt</button>
+              </div>
+              <div class="inspector-body" id="inspector-details">
+                <label class="field"><span>Name</span><input value="Office"></label>
+                <label class="field"><span>Description</span><textarea>Chats in Telegram, remembers for this agent only, and works on this Mac when the connector is online.</textarea></label>
+                <div class="field">
+                  <span>Avatar</span>
+                  <div class="swatches">
+                    <button type="button" class="on" style="background:#6d4dff"></button>
+                    <button type="button" style="background:#3b82f6"></button>
+                    <button type="button" style="background:#8b5cf6"></button>
+                    <button type="button" style="background:#10b981"></button>
+                    <button type="button" style="background:#f59e0b"></button>
+                    <button type="button" style="background:#ef4444"></button>
+                  </div>
+                </div>
+                <label class="field"><span>Computer</span>
+                  <select id="computer-select">
+                    <option>This Mac — online</option>
+                    <option>This Mac — offline</option>
+                  </select>
+                </label>
+                <div class="field"><span>Tags</span>
+                  <div class="tags"><span class="tag">telegram</span><span class="tag">timesheet</span><span class="tag">browser</span></div>
+                </div>
+              </div>
+              <div class="inspector-body" id="inspector-prompt" hidden>
+                <p class="prompt">You are Office, this person’s only agent. The chat is their Telegram bot.
+
+Remember only for this agent. The user can read or delete that memory.
+
+If the computer is offline, refuse machine work and say so.
+
+Never type passwords, codes, or approval clicks. Sensitive steps wait for a reply in the same chat.
+
+On the computer, one intent at a time. Read the page before you act.</p>
+              </div>
+            </aside>
+          </div>
+
+          <div class="bottom">
+            <section class="panel">
+              <div class="panel-h">
+                <h2>Memory</h2>
+                <div class="push">
+                  <button class="switch on" type="button" aria-label="Memory on"><i></i></button>
+                </div>
+              </div>
+              <p class="sub" id="memory-sub">Scoped to Office. The user can read or delete it.</p>
+              <label class="field"><span>Memory type</span>
+                <select><option>This agent only</option></select>
+              </label>
+              <div style="margin-top:8px">
+                <label class="checkline on"><input type="checkbox" checked> Conversation in Telegram</label>
+                <label class="checkline on"><input type="checkbox" checked> Do not submit until confirmed</label>
+                <label class="checkline on"><input type="checkbox" checked> Last week’s project code</label>
+                <label class="checkline"><input type="checkbox"> Summarize older runs</label>
+              </div>
+              <button class="linkish" type="button" data-view="memory" style="margin-top:auto;text-align:left">Open memory</button>
+            </section>
+
+            <section class="panel">
+              <div class="panel-h">
+                <h2>Connections</h2>
+                <div class="push"><button class="linkish" type="button" data-view="machine">Manage</button></div>
+              </div>
+              <p class="sub">The computer dials out. Nothing calls in.</p>
+              <div class="row-item">
+                <span class="ico">✈</span>
+                <div><h3>Telegram</h3><p>The chat. One bot.</p></div>
+                <span class="pill">Connected</span>
+              </div>
+              <div class="row-item">
+                <span class="ico">⌁</span>
+                <div><h3>This Mac</h3><p class="online-only">Connector dialed out.</p><p class="offline-only">Connector is quiet.</p></div>
+                <span class="pill online-only">Connected</span>
+                <span class="pill off offline-only">Offline</span>
+              </div>
+              <div class="row-item">
+                <span class="ico">▣</span>
+                <div><h3>Browser</h3><p id="browser-sub">MyWipro sign-in page.</p></div>
+                <span class="pill wait">In use</span>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-h">
+                <h2>Tools</h2>
+                <div class="push"><button class="linkish" type="button" id="add-tool">+ Add tool</button></div>
+              </div>
+              <p class="sub" id="tools-sub">What Office can use on this session.</p>
+              <div class="row-item">
+                <span class="ico">▣</span>
+                <div><h3>Browser</h3><p>Read the page, then act on refs.</p></div>
+                <button class="switch on" type="button" aria-label="Browser"><i></i></button>
+              </div>
+              <div class="row-item">
+                <span class="ico">↖</span>
+                <div><h3>Machine clicks</h3><p>Screenshot, click, and type.</p></div>
+                <button class="switch on" type="button" aria-label="Clicks"><i></i></button>
+              </div>
+              <div class="row-item">
+                <span class="ico">▤</span>
+                <div><h3>SAP</h3><p>Later, if the browser and clicks cannot drive it.</p></div>
+                <button class="switch" type="button" aria-label="SAP"><i></i></button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-memory" hidden>
+          <div class="list-card" id="memories">
+            <div class="mem-row"><div><h3>Timesheets are filed in MyWipro, usually on Friday.</h3><p>Learned from the timesheet skill and last week’s run.</p></div><button class="icon-btn" type="button">Delete</button></div>
+            <div class="mem-row"><div><h3>Do not submit a timesheet until the rows are confirmed in chat.</h3><p>You stopped a submit on 12 Sep.</p></div><button class="icon-btn" type="button">Delete</button></div>
+            <div class="mem-row"><div><h3>Last week used the same project code as the week before.</h3><p>Used when you do not name a project.</p></div><button class="icon-btn" type="button">Delete</button></div>
+            <div class="mem-row"><div><h3>This computer is a Mac. The connector dials out.</h3><p>Machine work is refused while that connection is down.</p></div><button class="icon-btn" type="button">Delete</button></div>
+          </div>
+        </section>
+
+        <section id="view-skills" hidden>
+          <div class="list-card" id="skills-body">
+            <div class="skill-block">
+              <div>
+                <p class="kind tried">In use</p>
+                <h3>Timesheet</h3>
+                <p>Fill MyWipro efforts in the browser. Hand login and submit back to the user. Act only on element refs from the latest page.</p>
+              </div>
+            </div>
+            <div class="skill-block"><div><h3>Open MyWipro</h3><p>Go to the efforts area for the period named in the chat.</p></div></div>
+            <div class="skill-block"><div><h3>Stop on sign-in</h3><p>Do not type passwords, codes, or approval clicks. Ask in the chat.</p></div></div>
+            <div class="skill-block"><div><h3>Enter the hours given</h3><p>Do not submit until the page matches, then ask before saving.</p></div></div>
+          </div>
+          <div class="panel" style="padding:16px">
+            <h2 style="margin:0 0 10px">New skill</h2>
+            <label class="field"><span>Name</span><input placeholder="Inbox"></label>
+            <label class="field" style="margin-top:10px"><span>When to use it</span><input placeholder="When I ask you to check mail"></label>
+            <label class="field" style="margin-top:10px"><span>Instructions</span><textarea placeholder="What to do, and where it must stop and ask."></textarea></label>
+            <div style="margin-top:12px"><button class="btn primary" type="button">Save skill</button></div>
+          </div>
+        </section>
+
+        <section id="view-activity" hidden>
+          <div class="list-card" id="activity-body" style="padding:16px 18px">
+            <div class="timeline">
+              <article class="event decided"><time>16:15</time><div class="rail"><i></i><span></span></div><div class="body"><p class="kind decided">Decided</p><strong>Pause. Do not type the password.</strong><p style="margin:4px 0 0;color:var(--muted)">The page is a sign-in wall. Office asked in Telegram and is waiting for a reply in that chat.</p></div></article>
+              <article class="event tried"><time>16:15</time><div class="rail"><i></i><span></span></div><div class="body"><p class="kind tried">Tried</p><strong>Read the page</strong><p style="margin:4px 0 0;color:var(--muted)">MyWipro home. Username, password, and Sign in. No timesheet yet.</p></div></article>
+              <article class="event tried"><time>16:14</time><div class="rail"><i></i><span></span></div><div class="body"><p class="kind tried">Tried</p><strong>Open MyWipro in the browser</strong><p style="margin:4px 0 0;color:var(--muted)">Machine clicks were not used.</p></div></article>
+              <article class="event said"><time>16:14</time><div class="rail"><i></i><span></span></div><div class="body"><p class="kind said">Said</p><strong>I’ll open MyWipro and fill this week. I won’t submit.</strong><p style="margin:4px 0 0;color:var(--muted)">Reply in Telegram.</p></div></article>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-pause" hidden>
+          <div class="runbar">
+            Waiting since 16:15
+            <span>This screen does not approve the step. Reply in the same chat.</span>
+            <a class="btn primary" href="chat.html">Open the chat</a>
+          </div>
+          <div class="bottom" style="grid-template-columns:1fr 1fr">
+            <section class="panel">
+              <h2>It will do next</h2>
+              <div class="row-item"><div><h3>Read the page again</h3><p>Only after you say you are past sign-in.</p></div></div>
+              <div class="row-item"><div><h3>Enter this week’s hours</h3><p>Monday–Friday, same project as last week.</p></div></div>
+              <div class="row-item"><div><h3>Stop before submit</h3><p>It lists the rows and waits for another reply.</p></div></div>
+            </section>
+            <section class="panel">
+              <h2>It will not do</h2>
+              <div class="row-item"><div><h3>Type the password</h3><p>Keystrokes on the live desktop are not stored.</p></div></div>
+              <div class="row-item"><div><h3>Start a second intent</h3><p>This session holds one piece of work.</p></div></div>
+              <div class="row-item"><div><h3>Continue while the Mac is off</h3><p>The pause stays. The computer has to dial out.</p></div></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-machine" hidden>
+          <div class="bottom" style="grid-template-columns:1fr 1.2fr">
+            <div>
+              <section class="panel" style="margin-bottom:12px;background:#f3fffb;border-color:#b7ebc9">
+                <h2 style="margin:0">Connector</h2>
+                <p class="online-only" style="color:var(--muted)">Dialed out from this Mac. The credential stays on the computer.</p>
+                <p class="offline-only" style="color:var(--muted)">Last seen 2h ago. It dials out when the Mac wakes.</p>
+              </section>
+              <section class="panel" style="margin-bottom:12px">
+                <h2 style="margin:0">Machine clicks</h2>
+                <p style="color:var(--muted)">Screenshot, click, and type on the computer. Not used for this intent.</p>
+              </section>
+              <section class="panel later">
+                <h2 style="margin:0;color:var(--muted)">SAP</h2>
+                <p style="color:var(--muted)">Later, on this same session, if the browser and clicks cannot drive it.</p>
+              </section>
+            </div>
+            <section class="panel">
+              <div class="panel-h"><h2>Browser</h2><span class="pill wait">In use</span></div>
+              <p class="sub">First capability. Office reads the page, then acts on element refs.</p>
+              <div class="browser">
+                <div class="browser-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">mywipro.example · sign in</div></div>
+                <div class="login-page">
+                  <h3>Sign in</h3>
+                  <p>Office is looking at this page. It has not typed anything.</p>
+                  <div class="fake-input">Username</div>
+                  <div class="fake-input">Password</div>
+                  <div class="fake-submit">Sign in</div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script>
+    const views = ["factory", "builder", "memory", "skills", "activity", "pause", "machine"];
+    let currentAgent = "office";
+    const agents = {
+      office: {
+        name: "Office",
+        letter: "O",
+        color: "#6d4dff",
+        soft: "#f3f0ff",
+        desc: "One agent, one Telegram bot. It chats and remembers while this Mac is off, and it works on the computer only when the connector is dialed out.",
+        blurb: "Decide. Refuse if offline.",
+        skill: "Timesheet",
+        skillBlurb: "Follow the skill",
+        paused: true,
+        pauseBlurb: "Waiting on sign-in",
+        runTitle: "Paused · Fill this week’s MyWipro timesheet",
+        runDetail: "Sign-in is on the page. The reply goes back to Telegram.",
+        caption: "How Office handles a message. One intent at a time once it reaches the computer.",
+        memorySub: "Scoped to Office. The user can read or delete it.",
+        toolsSub: "What Office can use on this session.",
+        browserSub: "MyWipro sign-in page.",
+        prompt: "You are Office, this person’s agent. The chat is their Telegram bot.\n\nRemember only for this agent. If the computer is offline, refuse machine work.\n\nNever type passwords. Sensitive steps wait for a reply in the same chat.",
+        memories: [
+          ["Timesheets are filed in MyWipro, usually on Friday.", "Learned from the timesheet skill and last week’s run."],
+          ["Do not submit a timesheet until the rows are confirmed in chat.", "You stopped a submit on 12 Sep."],
+          ["Last week used the same project code as the week before.", "Used when you do not name a project."]
+        ],
+        skills: [
+          ["Timesheet", "Fill MyWipro efforts in the browser. Hand login and submit back to the user.", true],
+          ["Open MyWipro", "Go to the efforts area for the period named in the chat.", false],
+          ["Stop on sign-in", "Do not type passwords, codes, or approval clicks. Ask in the chat.", false]
+        ],
+        activity: [
+          ["16:15", "decided", "Decided", "Pause. Do not type the password.", "The page is a sign-in wall. Waiting for a reply in Telegram."],
+          ["16:15", "tried", "Tried", "Read the page", "MyWipro home. Username, password, and Sign in."],
+          ["16:14", "said", "Said", "I’ll open MyWipro and fill this week. I won’t submit.", "Reply in Telegram."]
+        ]
+      },
+      sales: {
+        name: "Sales",
+        letter: "S",
+        color: "#2563eb",
+        soft: "#eff6ff",
+        desc: "Works the pipeline in the browser. One Telegram bot. It drafts the note, then waits in that chat before anything is sent.",
+        blurb: "Draft first. Send only after a reply.",
+        skill: "Pipeline",
+        skillBlurb: "Follow up, don’t send",
+        paused: false,
+        pauseBlurb: "Before a message is sent",
+        runTitle: "Idle",
+        runDetail: "No intent on the computer. The last note is still a draft.",
+        caption: "How Sales handles a message. It can read the pipeline. Sending waits for the chat.",
+        memorySub: "Scoped to Sales. The user can read or delete it.",
+        toolsSub: "What Sales can use on this session.",
+        browserSub: "Pipeline. Nothing is open.",
+        prompt: "You are Sales. The chat is this agent’s Telegram bot.\n\nDraft follow-ups from the pipeline. Do not send, book, or change a deal until the user replies in the same chat.\n\nIf the computer is offline, refuse machine work.",
+        memories: [
+          ["Follow-ups go out only after a yes in Telegram.", "You stopped a send on 18 Sep."],
+          ["The pipeline lives in the browser, not in a file.", "Sales does not use machine clicks unless the page has no refs."]
+        ],
+        skills: [
+          ["Pipeline", "Open the pipeline, list who is waiting, and draft the next note.", true],
+          ["Do not send", "Stop before send, book, or edit a deal. Ask in the chat.", false]
+        ],
+        activity: [
+          ["Yesterday", "said", "Said", "Three accounts are waiting. I drafted the Acme note and did not send it.", "Left in the chat."],
+          ["Yesterday", "tried", "Tried", "Read the pipeline", "Browser. No clicks."]
+        ]
+      },
+      coder: {
+        name: "Coder",
+        letter: "C",
+        color: "#15945a",
+        soft: "#ecfdf3",
+        desc: "Reads the repo on this Mac. One Telegram bot. It asks before it writes a file or runs a command.",
+        blurb: "Read freely. Write only after a reply.",
+        skill: "Repo",
+        skillBlurb: "Inspect, then ask",
+        paused: false,
+        pauseBlurb: "Before a write or a command",
+        runTitle: "Idle",
+        runDetail: "No intent on the computer. Nothing is waiting.",
+        caption: "How Coder handles a message. Reading the repo is allowed. Writing and commands wait for the chat.",
+        memorySub: "Scoped to Coder. The user can read or delete it.",
+        toolsSub: "What Coder can use on this session.",
+        browserSub: "Not in use.",
+        prompt: "You are Coder. The chat is this agent’s Telegram bot.\n\nYou may read the repo. Do not write files, install, or run commands until the user replies in the same chat.\n\nIf the computer is offline, refuse machine work.",
+        memories: [
+          ["The repo is on this Mac.", "Coder reaches it through the connector, not through a clone in the cloud."],
+          ["Ask before any write.", "You rejected an unapproved edit last week."]
+        ],
+        skills: [
+          ["Repo", "Read the tree and explain the change. Stop before writing.", true],
+          ["Commands", "Name the command in the chat and wait. Do not run it yourself.", false]
+        ],
+        activity: [
+          ["Mon", "said", "Said", "The login path is in browser.py. I have not changed it.", "Reply in Telegram."],
+          ["Mon", "tried", "Tried", "Read the file tree", "No writes."]
+        ]
+      }
+    };
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function openAgent(id) {
+      const agent = agents[id];
+      if (!agent) return;
+      currentAgent = id;
+      document.getElementById("agent-name").textContent = agent.name;
+      document.getElementById("crumb-name").textContent = agent.name;
+      document.getElementById("agent-desc").textContent = agent.desc;
+      document.getElementById("flow-caption").textContent = agent.caption;
+      document.getElementById("memory-sub").textContent = agent.memorySub;
+      document.getElementById("tools-sub").textContent = agent.toolsSub;
+      document.getElementById("browser-sub").textContent = agent.browserSub;
+      document.getElementById("node-agent-name").textContent = agent.name;
+      document.getElementById("node-agent-blurb").textContent = agent.blurb;
+      document.getElementById("node-skill-name").textContent = agent.skill;
+      document.getElementById("node-skill-blurb").textContent = agent.skillBlurb;
+      document.getElementById("node-pause-blurb").textContent = agent.pauseBlurb;
+      document.getElementById("runbar-title").textContent = agent.runTitle;
+      document.getElementById("runbar-detail").textContent = agent.runDetail;
+      document.getElementById("runbar").classList.toggle("idle", !agent.paused);
+      document.getElementById("pause-badge").hidden = !agent.paused;
+      const mark = document.getElementById("pause-mark");
+      mark.textContent = agent.paused ? "!" : "✓";
+      mark.classList.toggle("wait", agent.paused);
+      document.getElementById("agent-avatar").style.color = agent.color;
+      document.getElementById("agent-avatar").style.background = agent.soft;
+      document.getElementById("agent-avatar").style.borderColor = agent.soft;
+      const name = document.querySelector("#inspector-details input");
+      const desc = document.querySelector("#inspector-details textarea");
+      if (name && desc) { name.value = agent.name; desc.value = agent.desc; }
+      document.querySelector("#inspector-prompt .prompt").textContent = agent.prompt;
+      document.title = agent.name + " — Control Machine";
+      document.getElementById("memories").innerHTML = agent.memories.map(([h, p]) =>
+        `<div class="mem-row"><div><h3>${esc(h)}</h3><p>${esc(p)}</p></div><button class="icon-btn" type="button">Delete</button></div>`
+      ).join("");
+      document.getElementById("skills-body").innerHTML = agent.skills.map(([h, p, used]) =>
+        `<div class="skill-block"><div>${used ? '<p class="kind tried">In use</p>' : ""}<h3>${esc(h)}</h3><p>${esc(p)}</p></div></div>`
+      ).join("");
+      document.getElementById("activity-body").innerHTML = `<div class="timeline">${agent.activity.map(([time, kind, label, title, body]) =>
+        `<article class="event ${kind}"><time>${esc(time)}</time><div class="rail"><i></i><span></span></div><div class="body"><p class="kind ${kind}">${esc(label)}</p><strong>${esc(title)}</strong><p style="margin:4px 0 0;color:var(--muted)">${esc(body)}</p></div></article>`
+      ).join("")}</div>`;
+      document.querySelectorAll(".recent").forEach(el => {
+        el.classList.toggle("is-here", el.dataset.agent === id);
+      });
+    }
+    const details = {
+      trigger: ["Trigger", "Telegram message. This bot is the only chat."],
+      agent: ["Office", "Chats, remembers, and refuses machine work while the computer is offline."],
+      memory: ["Memory", "Scoped to this agent. The user can read or delete it."],
+      skill: ["Timesheet", "Written here, for this agent only. In use on the current intent."],
+      pause: ["Pause", "Sign-in is waiting. The reply has to come back in the same chat."],
+      end: ["Reply", "Approvals and the live desktop return to Telegram."],
+      browser: ["Browser", "Read the page, then act on element refs."],
+      clicks: ["Machine clicks", "Screenshot, click, and type on the computer itself."]
+    };
+
+    function show(name) {
+      if (!views.includes(name)) name = "builder";
+      views.forEach(v => {
+        document.getElementById("view-" + v).hidden = v !== name;
+      });
+      document.body.classList.toggle("is-factory", name === "factory");
+      document.getElementById("crumb-section").textContent = name === "factory" ? "Factory" : "Agent";
+      if (name === "factory") document.getElementById("crumb-name").textContent = "All agents";
+      else document.getElementById("crumb-name").textContent = agents[currentAgent].name;
+      document.querySelectorAll(".nav-link[data-nav]").forEach(el => {
+        const here = name === "factory" ? el.dataset.nav === "factory" : el.dataset.nav === "builder";
+        el.classList.toggle("is-here", here);
+      });
+      document.querySelectorAll(".recent").forEach(el => {
+        el.classList.toggle("is-here", el.dataset.agent === currentAgent);
+      });
+      document.querySelectorAll(".tabs [data-view]").forEach(el => {
+        el.classList.toggle("is-here", el.dataset.view === name);
+      });
+      if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    }
+
+    document.body.addEventListener("click", (ev) => {
+      const agentBtn = ev.target.closest("[data-agent]");
+      if (agentBtn && agents[agentBtn.dataset.agent]) {
+        openAgent(agentBtn.dataset.agent);
+        show("builder");
+        return;
+      }
+      const view = ev.target.closest("[data-view]");
+      if (view && view.dataset.view) {
+        show(view.dataset.view);
+        return;
+      }
+      const node = ev.target.closest("[data-select]");
+      if (node && details[node.dataset.select]) {
+        document.querySelectorAll(".node").forEach(n => n.classList.remove("selected"));
+        if (node.classList.contains("node")) node.classList.add("selected");
+        const [title, body] = details[node.dataset.select];
+        const name = document.querySelector("#inspector-details input");
+        const desc = document.querySelector("#inspector-details textarea");
+        if (name && desc) { name.value = title; desc.value = body; }
+        document.getElementById("add-menu").hidden = true;
+        show("builder");
+      }
+    });
+
+    document.getElementById("add-node").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const menu = document.getElementById("add-menu");
+      menu.hidden = !menu.hidden;
+    });
+
+    document.querySelectorAll(".switch").forEach(btn => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        btn.classList.toggle("on");
+      });
+    });
+
+    document.querySelectorAll(".swatches button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".swatches button").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        document.querySelector(".agent-avatar").style.color = btn.style.background;
+        document.querySelector(".agent-avatar").style.borderColor = btn.style.background;
+      });
+    });
+
+    document.querySelectorAll(".inspector-tabs button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".inspector-tabs button").forEach(b => b.classList.remove("is-here"));
+        btn.classList.add("is-here");
+        const which = btn.dataset.inspector;
+        document.getElementById("inspector-details").hidden = which !== "details";
+        document.getElementById("inspector-prompt").hidden = which !== "prompt";
+      });
+    });
+
+    document.getElementById("computer-select").addEventListener("change", (ev) => {
+      const off = ev.target.value.includes("offline");
+      document.body.classList.toggle("is-offline", off);
+      document.body.classList.toggle("is-online", !off);
+      document.getElementById("side-label").textContent = off ? "Computer offline" : "Computer online";
+    });
+
+    document.getElementById("save").addEventListener("click", (ev) => {
+      ev.currentTarget.textContent = "Saved";
+      setTimeout(() => { ev.target.textContent = "Save"; }, 900);
+    });
+
+    document.getElementById("memories").addEventListener("click", (ev) => {
+      if (ev.target.closest(".icon-btn")) ev.target.closest(".mem-row").remove();
+    });
+
+    document.getElementById("new-agent").addEventListener("click", () => {
+      document.getElementById("new-agent-form").hidden = false;
+      document.getElementById("new-agent-name").focus();
+    });
+    document.getElementById("cancel-agent").addEventListener("click", () => {
+      document.getElementById("new-agent-form").hidden = true;
+    });
+    document.getElementById("create-agent").addEventListener("click", () => {
+      const name = document.getElementById("new-agent-name").value.trim();
+      if (!name) return;
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const job = document.getElementById("new-agent-job").value.trim() || "A new agent with its own bot.";
+      agents[id] = {
+        name, letter: name.slice(0, 1).toUpperCase(), color: "#6d4dff", soft: "#f3f0ff",
+        desc: job + " One Telegram bot.",
+        blurb: "Decide. Refuse if offline.",
+        skill: "New skill", skillBlurb: "Not written yet",
+        paused: false, pauseBlurb: "If a step is sensitive",
+        runTitle: "Idle", runDetail: "No intent on the computer.",
+        caption: "How " + name + " handles a message.",
+        memorySub: "Scoped to " + name + ". The user can read or delete it.",
+        toolsSub: "What " + name + " can use on this session.",
+        browserSub: "Not in use.",
+        prompt: "You are " + name + ". The chat is this agent’s Telegram bot. If the computer is offline, refuse machine work.",
+        memories: [["Nothing saved yet.", "Memory for this agent starts empty."]],
+        skills: [["New skill", "Write the instructions in Skills.", true]],
+        activity: []
+      };
+      const card = document.createElement("button");
+      card.className = "agent-card";
+      card.type = "button";
+      card.dataset.agent = id;
+      card.innerHTML = `<span class="mark" style="background:#f3f0ff;color:#6d4dff">${esc(agents[id].letter)}</span><h2>${esc(name)}</h2><p class="desc">${esc(job)}</p><div class="meta"><span class="pill off">Idle</span></div><span class="open">Open agent</span>`;
+      document.getElementById("factory-grid").appendChild(card);
+      const recent = document.createElement("button");
+      recent.className = "recent";
+      recent.type = "button";
+      recent.dataset.agent = id;
+      recent.innerHTML = "<i></i> " + esc(name);
+      document.getElementById("recent-list").appendChild(recent);
+      document.getElementById("new-agent-form").hidden = true;
+      document.getElementById("new-agent-name").value = "";
+      document.getElementById("new-agent-job").value = "";
+      openAgent(id);
+      show("builder");
+    });
+
+    const start = (location.hash || "#builder").slice(1);
+    if (agents[start]) openAgent(start);
+    show(agents[start] ? "builder" : start);
+  </script>
+</body>
+</html>

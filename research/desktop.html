@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live desktop — Control Machine</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body>
+  <div class="desk-page">
+    <div class="desk-bar">
+      <button type="button" class="on">1</button>
+      <button type="button">2</button>
+      <button type="button" id="apps">Apps</button>
+      <button type="button">Menu</button>
+      <button type="button">−</button>
+      <button type="button">+</button>
+      <button type="button" id="keys" class="on">Keyboard</button>
+      <a href="chat.html" style="margin-left:auto;color:#9aa3b2;font-size:13px">Back to chat</a>
+    </div>
+    <div class="desk-status" id="status">Screen 1 — tap to click. Type in the field below. Keystrokes are not stored.</div>
+    <div class="desk-screen" id="screen">
+      <div class="menubar"><span>Finder</span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span></div>
+      <div class="win">
+        <div class="win-bar">MyWipro — Sign in</div>
+        <div class="login-page">
+          <h3>Sign in</h3>
+          <p>You are driving this Mac. The agent is paused until you reply in Telegram.</p>
+          <div class="fake-input">Username</div>
+          <div class="fake-input">Password</div>
+          <div class="fake-submit">Sign in</div>
+        </div>
+      </div>
+      <div class="cursor-dot" id="dot" hidden></div>
+    </div>
+    <div id="composer" style="display:flex;gap:8px;align-items:center;padding:8px 12px 16px;background:#12151c;border-top:1px solid #2a3140">
+      <input id="keys-field" placeholder="Tap here and type" aria-label="Type on this Mac" style="flex:1;height:44px;padding:10px 12px;color:#e8eaed;background:#1b2230;border:1px solid #7cb7ff;border-radius:8px">
+      <button type="button" id="hide" style="border:1px solid #3d4658;background:#1b2230;color:#e8eaed;border-radius:8px;padding:10px 12px">Hide</button>
+    </div>
+  </div>
+  <script>
+    const screen = document.getElementById("screen");
+    const dot = document.getElementById("dot");
+    const status = document.getElementById("status");
+    screen.addEventListener("click", (ev) => {
+      const rect = screen.getBoundingClientRect();
+      dot.hidden = false;
+      dot.style.left = (ev.clientX - rect.left - 9) + "px";
+      dot.style.top = (ev.clientY - rect.top - 9) + "px";
+      status.textContent = "Clicked on screen 1. The agent is still paused.";
+    });
+    document.getElementById("keys").addEventListener("click", () => {
+      document.getElementById("keys-field").focus();
+    });
+    document.getElementById("hide").addEventListener("click", () => {
+      document.getElementById("composer").style.display = "none";
+      document.getElementById("keys").classList.remove("on");
+      status.textContent = "Keyboard hidden. Tap Keyboard to type.";
+    });
+    document.getElementById("apps").addEventListener("click", (ev) => {
+      ev.currentTarget.classList.toggle("on");
+      status.textContent = ev.currentTarget.classList.contains("on")
+        ? "All windows — tap Apps again to close."
+        : "Apps hidden.";
+    });
+  </script>
+</body>
+</html>
