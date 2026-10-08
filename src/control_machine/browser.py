@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw, ImageFont
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
 from playwright.async_api import Error as PlaywrightError
 
-from .config import get_settings
+from .config import Settings, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -181,10 +181,12 @@ class Mark:
 class BrowserSession:
     """A lazily-connected, auto-reconnecting handle on the user's Chrome."""
 
-    def __init__(self, cdp_endpoint: str) -> None:
+    def __init__(self, cdp_endpoint: str, *, preserve_pages: bool = False) -> None:
         settings = get_settings()
         self._endpoint = cdp_endpoint
         self._settings = settings
+        self._preserve_pages = preserve_pages
+        self._user_pages: list[Page] = []
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -234,10 +236,23 @@ class BrowserSession:
             )
         except Exception as exc:  # noqa: BLE001 - surfaced to the model as guidance
             log.exception("CDP attach failed for %s", self._endpoint)
+            if self._preserve_pages:
+                hint = (
+                    "Chrome 136 and later will not open a debugging port on the "
+                    "everyday profile, and a second launch is ignored while Chrome "
+                    "is already open. Start a separate window with "
+                    "'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome "
+                    "--remote-debugging-port=9222 "
+                    "--user-data-dir=$HOME/Library/Application\\ Support/control-machine/chrome' "
+                    "and try again."
+                )
+            else:
+                hint = (
+                    "Start the browser containers with "
+                    "'docker compose --profile browsers up -d' and try again."
+                )
             raise BrowserError(
-                f"Could not attach to Chrome at {self._endpoint}. "
-                "Start the browser containers with "
-                "'docker compose --profile browsers up -d' and try again. "
+                f"Could not attach to Chrome at {self._endpoint}. {hint} "
                 f"({type(exc).__name__}: {exc})"
             ) from exc
 
@@ -247,7 +262,12 @@ class BrowserSession:
         self._context = self._browser.contexts[0]
         # Follow popups and target=_blank tabs, which is where flows often continue.
         self._context.on("page", self._on_new_page)
-        self._page = self._context.pages[-1] if self._context.pages else None
+        self._user_pages = [page for page in self._context.pages if not page.is_closed()]
+        # A host browser keeps the user's existing tabs. The agent works in a new one.
+        if self._preserve_pages:
+            self._page = None
+        else:
+            self._page = self._user_pages[-1] if self._user_pages else None
 
     def _on_new_page(self, page: Page) -> None:
         self._page = page
@@ -256,6 +276,12 @@ class BrowserSession:
         async with self._lock:
             await self._ensure_connected()
             assert self._context is not None
+
+            if self._preserve_pages:
+                if self._page is None or self._page.is_closed():
+                    self._page = await self._context.new_page()
+                    await self._page.bring_to_front()
+                return self._page
 
             if self._page is None or self._page.is_closed():
                 open_pages = [p for p in self._context.pages if not p.is_closed()]
@@ -277,6 +303,16 @@ class BrowserSession:
 
     async def reset(self) -> None:
         """Return a slot to one blank tab without clearing its persistent login state."""
+        if self._preserve_pages:
+            self._marks.clear()
+            self._page = None
+            if self._context is not None:
+                for page in list(self._context.pages):
+                    if page in self._user_pages or page.is_closed():
+                        continue
+                    with contextlib.suppress(Exception):
+                        await page.close()
+            return
         pages = await self.list_pages()
         keep = pages[0]
         for page in pages[1:]:
@@ -560,8 +596,22 @@ class BrowserPool:
                 self._available.put_nowait(slot)
 
     @classmethod
-    def from_settings(cls) -> BrowserPool:
-        settings = get_settings()
+    def from_settings(cls, settings: Settings | None = None) -> BrowserPool:
+        resolved = settings or get_settings()
+        if resolved.uses_host_browser:
+            endpoint = resolved.browser_cdp_endpoint.strip() or "http://127.0.0.1:9222"
+            return cls(
+                [
+                    BrowserSlot(
+                        id=1,
+                        cdp_endpoint=endpoint,
+                        novnc_url="",
+                        session=BrowserSession(endpoint, preserve_pages=True),
+                    )
+                ],
+                1,
+            )
+        settings = resolved
         slots = []
         for index in range(settings.browser_slot_count):
             slot_id = index + 1

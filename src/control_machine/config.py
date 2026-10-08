@@ -33,10 +33,14 @@ class Settings(BaseSettings):
     # TypeSafe Jev chooses each browser action. Empty disables browser_drive.
     typesafe_api_key: str = ""
 
+    # docker uses the container browsers. host attaches to Chrome on this Mac.
+    browser_backend: str = "docker"
     browser_slot_count: int = Field(default=2, ge=1)
     browser_cdp_base_port: int = 9231
     browser_novnc_base_port: int = 6081
     browser_host: str = "127.0.0.1"
+    # Used when BROWSER_BACKEND=host. Chrome must be started with this debugging port.
+    browser_cdp_endpoint: str = "http://127.0.0.1:9222"
     max_parallel_runs: int = Field(default=2, ge=1)
     browser_session_idle_seconds: int = Field(default=900, ge=30)
 
@@ -76,6 +80,10 @@ class Settings(BaseSettings):
     # Local traces and errors. Empty log_dir means <project>/logs.
     log_dir: str = ""
     log_level: str = "INFO"
+
+    @property
+    def uses_host_browser(self) -> bool:
+        return self.browser_backend.strip().lower() == "host"
 
     @property
     def allowed_domains(self) -> list[str]:

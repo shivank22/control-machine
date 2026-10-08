@@ -640,14 +640,18 @@ function setBrowser(slotId, url) {
   currentBrowserUrl = url || null;
   $("slot-label").textContent = slotId ? `slot ${slotId}` : "no slot";
   const frame = $("browser-frame");
+  const empty = $("browser-empty");
   if (url) {
     if (frame.src !== url) frame.src = url;
     frame.style.display = "block";
-    $("browser-empty").style.display = "none";
+    empty.style.display = "none";
   } else {
     frame.style.display = "none";
     frame.removeAttribute("src");
-    $("browser-empty").style.display = "block";
+    empty.style.display = "block";
+    empty.textContent = slotId
+      ? "This run is driving Chrome on this Mac. Watch that window."
+      : "Select or start a running conversation to view and control its browser.";
   }
 }
 

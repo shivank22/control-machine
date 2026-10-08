@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Start Postgres, the browser this machine should drive, then the app.
+# Ctrl-C stops the app. Docker and the host Chrome window stay up.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+env_get() {
+  local key="$1"
+  local default="$2"
+  local line=""
+  if [[ -f .env ]]; then
+    line="$(grep -E "^${key}=" .env | tail -1 || true)"
+  fi
+  if [[ -z "$line" ]]; then
+    printf '%s' "$default"
+  else
+    printf '%s' "${line#*=}"
+  fi
+}
+
+wait_for_cdp() {
+  local url="$1"
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if curl -fsS --max-time 1 "${url}/json/version" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.4
+  done
+  echo "Chrome did not open ${url}." >&2
+  return 1
+}
+
+backend="$(env_get BROWSER_BACKEND docker)"
+endpoint="$(env_get BROWSER_CDP_ENDPOINT "http://127.0.0.1:9222")"
+endpoint="${endpoint%/}"
+
+echo "Starting Postgres..."
+docker compose up -d
+
+if [[ "$backend" == "host" ]]; then
+  if curl -fsS --max-time 2 "${endpoint}/json/version" >/dev/null 2>&1; then
+    echo "Chrome is already listening at ${endpoint}."
+  else
+    profile="${HOME}/Library/Application Support/control-machine/chrome"
+    mkdir -p "$profile"
+    port="${endpoint##*:}"
+    echo "Starting Chrome on port ${port}..."
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+      --remote-debugging-port="${port}" \
+      --user-data-dir="${profile}" \
+      --no-first-run \
+      --no-default-browser-check \
+      --remote-allow-origins='*' \
+      >/tmp/control-machine-chrome.log 2>&1 &
+    wait_for_cdp "$endpoint"
+    echo "Chrome is listening at ${endpoint}."
+  fi
+else
+  echo "Starting browser containers..."
+  docker compose --profile browsers up -d
+fi
+
+echo "Starting control-machine..."
+exec uv run control-machine
