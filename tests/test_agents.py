@@ -101,7 +101,6 @@ class SpecialistIsolationTests(unittest.TestCase):
         self.assertEqual(browser_spec["runnable"].name, "browser")
         self.assertIsNone(browser_spec["runnable"].checkpointer)
         browser = {tool.name for tool in build_browser_tools(object(), vision, settings)}  # type: ignore[arg-type]
-        browser.add("ask_user")
         by_name = {
             str(spec["name"]): {tool.name for tool in spec["tools"]}  # type: ignore[attr-defined]
             for spec in specs
@@ -110,13 +109,18 @@ class SpecialistIsolationTests(unittest.TestCase):
         self.assertEqual(set(by_name), {"files", "desktop"})
 
         files, desktop = by_name["files"], by_name["desktop"]
-        # ask_user is the shared handoff. Domain tools stay on one specialist.
-        self.assertTrue((browser - {"ask_user"}).isdisjoint(files))
-        self.assertTrue((browser - {"ask_user"}).isdisjoint(desktop - {"ask_user"}))
+        # The browser model navigates, reads, and hands the goal to Jev.
+        # Clicks stay inside browser_drive. ask_user stays on the desktop specialist.
+        self.assertEqual(
+            browser,
+            {"browser_navigate", "browser_read_page", "browser_drive"},
+        )
+        self.assertTrue(browser.isdisjoint(files))
+        self.assertTrue(browser.isdisjoint(desktop))
         self.assertTrue(files.isdisjoint(desktop))
 
-        self.assertIn("browser_click", browser)
-        self.assertIn("ask_user", browser)
+        self.assertNotIn("browser_click", browser)
+        self.assertNotIn("ask_user", browser)
         self.assertNotIn("fs_download", browser)
         self.assertNotIn("desktop_click", browser)
         self.assertNotIn("open_live_desktop", browser)

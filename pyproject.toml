@@ -23,6 +23,7 @@ dependencies = [
     "croniter>=3.0",
     "python-telegram-bot>=21.6",
     "websockets>=14.0",
+    "typesafe-sdk>=0.7.2",
 ]
 
 [project.scripts]

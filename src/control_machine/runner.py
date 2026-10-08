@@ -764,6 +764,7 @@ _NODE_ACTIVITY: dict[str, tuple[str, str]] = {
 
 _TOOL_ACTIVITY: dict[str, tuple[str, str]] = {
     "browser_navigate": ("🌐", "Opening a page"),
+    "browser_drive": ("🧭", "Driving the browser"),
     "browser_snapshot": ("👀", "Reading page elements"),
     "browser_click": ("🖱️", "Clicking"),
     "browser_click_xy": ("🖱️", "Clicking"),
@@ -809,6 +810,9 @@ def _activity_for_tool(name: str, args: dict[str, Any] | None = None) -> tuple[s
         url = str(args.get("url") or "").strip()
         target = _host(url) or url
         return emoji, f"Opening {_clip(target)}" if target else fallback
+    if name == "browser_drive":
+        goal = str(args.get("goal") or "").strip()
+        return emoji, f"Driving: {_clip(goal)}" if goal else fallback
     if name in {"browser_click", "browser_click_xy"}:
         target = str(args.get("element") or args.get("ref") or "").strip()
         if target:

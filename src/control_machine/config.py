@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "gemma4:latest"
 
+    # TypeSafe Jev chooses each browser action. Empty disables browser_drive.
+    typesafe_api_key: str = ""
+
     browser_slot_count: int = Field(default=2, ge=1)
     browser_cdp_base_port: int = 9231
     browser_novnc_base_port: int = 6081

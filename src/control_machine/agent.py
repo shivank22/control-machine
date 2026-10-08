@@ -76,19 +76,16 @@ Answer in plain language with what the specialist reported. Do not invent result
 
 BROWSER_PROMPT = """You drive Docker Chrome for the user.
 
-Every tool result shows the page as a list of elements, each tagged with a ref like e12.
-Act on refs: browser_click(ref=...), browser_type(ref=...). Never invent a ref.
-One action per step. If a control is not in the element list, call browser_screenshot with
-marks=True. Only fall back to browser_click_xy if that also fails.
-Use browser_read_page to extract page content. After ask_user or a live update, treat the
-current page as ground truth.
+Open a known URL with browser_navigate, then call browser_drive with the goal.
+browser_drive chooses and performs the clicks, scrolls, and typing. Do not invent
+element refs or click the page yourself.
 
-Never type passwords, payment details, one-time codes, or solve captchas. If a login,
-captcha, sensitive field, or high-impact choice blocks you, call ask_user. The user can
-open the live desktop from Telegram and reply when finished.
-An authentication flow is still blocked while the page says "approve sign in", displays an
-MFA number, waits for an authenticator, or asks for a verification code. Include any
-displayed number in ask_user and wait.
+Use browser_read_page when you need the page text for a summary.
+
+If browser_drive returns a line starting with NEED_USER:, stop and reply with that
+line. Do not type passwords, payment details, one-time codes, or solve captchas.
+The supervisor opens the live desktop. After the user says they are done, call
+browser_drive again on the current page. Do not start over.
 
 Finish with a short summary of what you did or found. Do not include raw page dumps."""
 
@@ -468,14 +465,14 @@ def build_browser_agent(
     attached here later; they are not inherited from the supervisor.
     """
     provider = settings.resolved_llm_provider
-    browser_tools: list[BaseTool] = [*build_browser_tools(session, vision, settings), ask_user]
-    browser_interrupt: dict[str, object] = {
-        **_ask_user_interrupt(),
-        "browser_click_xy": {
-            "allowed_decisions": ["approve", "reject"],
-            "description": "The agent wants to click a raw screen position",
-        },
-    }
+    browser_tools: list[BaseTool] = build_browser_tools(
+        session,
+        vision,
+        settings,
+        model=model,
+        running=running,
+    )
+    browser_interrupt: dict[str, object] = {}
     if settings.allowed_domains:
         browser_interrupt["browser_navigate"] = {
             "allowed_decisions": ["approve", "edit", "reject"],

@@ -1,13 +1,9 @@
-"""The browser tool surface.
+"""The browser tool surface the specialist model is allowed to call.
 
-Deliberately small. Playwright MCP exposes 40+ tools; an 8B model picking from that many
-schemas spends most of its budget choosing rather than acting. These eleven cover the
-flows we care about, and every acting tool returns a fresh page snapshot so the model
-never has to spend a turn re-observing.
-
-Refs come from the snapshot and resolve through Playwright's ``aria-ref=`` engine, which
-is exact. ``browser_screenshot`` is for looking, not acting, and ``browser_click_xy`` is
-the escape hatch of last resort.
+The model opens a known URL, reads the page, and hands the goal to ``browser_drive``.
+Jev then picks one id from the page catalog. Click, type, select, key, scroll, and
+coordinate clicks stay on ``BrowserSession`` and are performed by that loop, not chosen
+by the model.
 """
 
 from __future__ import annotations
@@ -17,26 +13,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool, tool
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 from ..browser import BrowserError, BrowserSession
 from ..config import Settings
+from ..jev_browser import drive_browser
 
 log = logging.getLogger(__name__)
 
-ACTING_TOOLS = frozenset(
-    {
-        "browser_navigate",
-        "browser_click",
-        "browser_type",
-        "browser_select_option",
-        "browser_press_key",
-        "browser_scroll",
-        "browser_click_xy",
-    }
-)
+ACTING_TOOLS = frozenset({"browser_navigate", "browser_drive"})
 
 
 @dataclass
@@ -78,8 +66,11 @@ def build_browser_tools(
     session: BrowserSession,
     vision: VisionBuffer,
     settings: Settings,
+    *,
+    model: BaseChatModel | None = None,
+    running: Any | None = None,
 ) -> list[BaseTool]:
-    """Bind the tool surface to one browser session."""
+    """Bind the model-facing browser tools to one session."""
 
     async def observe(note: str) -> str:
         try:
@@ -103,231 +94,38 @@ def build_browser_tools(
             return _explain(exc, f"Could not open {url}")
 
     @tool
-    async def browser_snapshot() -> str:
-        """Re-read the current page's elements and their refs."""
-        try:
-            return await session.observation("Current page.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, "Could not read the page")
-
-    @tool
-    async def browser_click(ref: str, element: str) -> str:
-        """Click an element.
-
-        Args:
-            ref: Element ref from the latest snapshot, for example e12.
-            element: Short human description of what you are clicking, for the activity log.
-        """
-        try:
-            _, locator = await session.resolve(ref)
-            await locator.scroll_into_view_if_needed(timeout=5_000)
-            await locator.click(timeout=15_000)
-            vision.clear()
-            return await observe(f"Clicked {element}.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not click {element} ({ref})")
-
-    @tool
-    async def browser_type(ref: str, text: str, submit: bool = False) -> str:
-        """Type text into an input or textarea, replacing what is already there.
-
-        Args:
-            ref: Element ref from the latest snapshot.
-            text: Text to enter.
-            submit: Press Enter afterwards, which submits most search boxes and forms.
-        """
-        try:
-            page, locator = await session.resolve(ref)
-            await locator.scroll_into_view_if_needed(timeout=5_000)
-            await locator.fill(text, timeout=15_000)
-            note = f"Typed {text!r}."
-            if submit:
-                await locator.press("Enter")
-                await _settle(page)
-                note += " Pressed Enter."
-            vision.clear()
-            return await observe(note)
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not type into {ref}")
-
-    @tool
-    async def browser_select_option(ref: str, value: str) -> str:
-        """Choose an option in a dropdown.
-
-        Args:
-            ref: Element ref of the select element.
-            value: Visible label of the option to choose.
-        """
-        try:
-            _, locator = await session.resolve(ref)
-            try:
-                await locator.select_option(label=value, timeout=10_000)
-            except PlaywrightError:
-                await locator.select_option(value=value, timeout=10_000)
-            vision.clear()
-            return await observe(f"Selected {value!r}.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not select {value!r} in {ref}")
-
-    @tool
-    async def browser_press_key(key: str) -> str:
-        """Press a keyboard key on the page, such as Enter, Escape, Tab or ArrowDown.
-
-        Args:
-            key: Key name as Playwright spells it.
-        """
-        try:
-            page = await session.page()
-            await page.keyboard.press(key)
-            await _settle(page)
-            vision.clear()
-            return await observe(f"Pressed {key}.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not press {key}")
-
-    @tool
-    async def browser_scroll(direction: str = "down", pages: float = 1.0) -> str:
-        """Scroll the page to bring offscreen content into view.
-
-        Args:
-            direction: "down", "up", "top" or "bottom".
-            pages: How many viewport heights to scroll, for up and down.
-        """
-        try:
-            page = await session.page()
-            move = {
-                "top": "() => window.scrollTo(0, 0)",
-                "bottom": "() => window.scrollTo(0, document.body.scrollHeight)",
-            }.get(direction.lower())
-            if move:
-                await page.evaluate(move)
-            elif direction.lower() in {"down", "up"}:
-                sign = 1 if direction.lower() == "down" else -1
-                await page.evaluate(
-                    "([sign, pages]) => window.scrollBy(0, sign * pages * window.innerHeight)",
-                    [sign, pages],
-                )
-            else:
-                return "direction must be one of: down, up, top, bottom."
-            await page.wait_for_timeout(350)
-            vision.clear()
-            return await observe(f"Scrolled {direction}.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not scroll {direction}")
-
-    @tool
-    async def browser_wait_for(text: str | None = None, seconds: float | None = None) -> str:
-        """Wait for text to appear on the page, or just wait a fixed time.
-
-        Args:
-            text: Text to wait for, up to 20 seconds.
-            seconds: Fixed wait instead, capped at 20.
-        """
-        try:
-            page = await session.page()
-            if text:
-                await page.get_by_text(text, exact=False).first.wait_for(
-                    state="visible", timeout=20_000
-                )
-                return await observe(f"{text!r} appeared.")
-            wait = min(float(seconds or 2.0), 20.0)
-            await page.wait_for_timeout(wait * 1000)
-            return await observe(f"Waited {wait:g}s.")
-        except PlaywrightTimeout:
-            return await observe(f"{text!r} did not appear within 20s.")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, "Could not wait")
-
-    @tool
     async def browser_read_page() -> str:
         """Read the page as plain text. Use this to extract or summarise content."""
         try:
-            page = await session.page()
-            text = await page.evaluate(
-                "() => (document.querySelector('main') || document.body).innerText"
-            )
-            text = "\n".join(line.rstrip() for line in text.splitlines() if line.strip())
-            limit = settings.snapshot_max_chars * 2
-            if len(text) > limit:
-                text = text[:limit] + "\n... text truncated; scroll for more."
             header = await session.page_header()
+            text = await session.visible_text(limit=settings.snapshot_max_chars * 2)
             return f"{header}\n\ntext:\n{text}"
         except (BrowserError, PlaywrightError) as exc:
             return _explain(exc, "Could not read the page text")
 
     @tool
-    async def browser_screenshot(reason: str, marks: bool = False) -> str:
-        """Look at the page as an image. Use only when the elements list is not enough,
-        for example canvas, charts, maps, unlabelled icons, or to confirm how something looks.
+    async def browser_drive(goal: str) -> str:
+        """Choose and perform clicks, scrolls, and typing until the goal is done.
 
         Args:
-            reason: Why the picture is needed.
-            marks: Draw numbered boxes over clickable elements and list their refs. Use this
-                when you can see a control in the picture but cannot find it in the elements.
+            goal: What to accomplish on the current page, including any values to enter.
+                Say so explicitly if this run must not submit, save, or pay.
         """
+        if model is None:
+            return "No chat model is available to type into the page."
         try:
-            image_b64, found, path = await session.screenshot(
-                marks=marks, save_to=vision.next_path()
+            return await drive_browser(
+                session=session,
+                settings=settings,
+                model=model,
+                goal=goal,
+                running=running,
+                vision=vision,
             )
-            caption = f"Screenshot: {reason}"
-            legend = ""
-            if marks and found:
-                lines = "\n".join(f"  {m.number}. {m.description} -> ref {m.ref}" for m in found)
-                legend = (
-                    f"\n{len(found)} numbered elements in the picture. "
-                    f"Click one with browser_click using its ref:\n{lines}"
-                )
-            elif marks:
-                legend = "\nNo clickable elements could be marked in the current viewport."
-
-            vision.set(image_b64, caption, path)
-            note = f"{caption} The image is attached to this conversation.{legend}"
-            if path is not None:
-                note += f"\n[screenshot: {path.as_posix()}]"
-            return note
         except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, "Could not take a screenshot")
+            return _explain(exc, "Could not drive the browser")
 
-    @tool
-    async def browser_click_xy(x: float, y: float, element: str) -> str:
-        """Last resort: click raw viewport coordinates. Only use when the element has no ref
-        and cannot be marked in a screenshot. Prefer browser_click with a ref.
-
-        Args:
-            x: Horizontal position in CSS pixels from the left of the viewport.
-            y: Vertical position in CSS pixels from the top of the viewport.
-            element: Short description of what is being clicked.
-        """
-        try:
-            page = await session.page()
-            await page.mouse.click(x, y)
-            await _settle(page)
-            vision.clear()
-            return await observe(f"Clicked {element} at ({x:g}, {y:g}).")
-        except (BrowserError, PlaywrightError) as exc:
-            return _explain(exc, f"Could not click at ({x:g}, {y:g})")
-
-    return [
-        browser_navigate,
-        browser_snapshot,
-        browser_click,
-        browser_type,
-        browser_select_option,
-        browser_press_key,
-        browser_scroll,
-        browser_wait_for,
-        browser_read_page,
-        browser_screenshot,
-        browser_click_xy,
-    ]
-
-
-async def _settle(page: Any) -> None:
-    """Give a click or keypress a moment to navigate before we snapshot again."""
-    try:
-        await page.wait_for_load_state("domcontentloaded", timeout=8_000)
-    except PlaywrightError:
-        pass
+    return [browser_navigate, browser_read_page, browser_drive]
 
 
 def _explain(exc: Exception, prefix: str) -> str:
@@ -335,8 +133,8 @@ def _explain(exc: Exception, prefix: str) -> str:
     log.warning("%s: %s", prefix, exc)
     if isinstance(exc, PlaywrightTimeout):
         return (
-            f"{prefix}: timed out. The element may be hidden, covered, or the page may "
-            "still be loading. Take a fresh browser_snapshot and try again."
+            f"{prefix}: timed out. The page may still be loading. "
+            "Call browser_drive again or browser_read_page to see where things stand."
         )
     detail = str(exc).split("\nCall log:")[0].strip()
     return f"{prefix}: {detail}"
