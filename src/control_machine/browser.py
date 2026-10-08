@@ -18,6 +18,8 @@ import contextlib
 import io
 import logging
 import re
+import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,6 +102,18 @@ STANDING_ACTIONS: tuple[BrowserAction, ...] = (
         value="up",
     ),
     BrowserAction(
+        "wait:short",
+        "wait",
+        "Wait briefly for the page to finish a small update",
+        value="short",
+    ),
+    BrowserAction(
+        "wait:content",
+        "wait",
+        "Wait for loading content, a spinner, or a slow page update before acting",
+        value="content",
+    ),
+    BrowserAction(
         "key:Enter",
         "key",
         "Press Enter, which submits most search boxes and forms",
@@ -122,6 +136,36 @@ STANDING_ACTIONS: tuple[BrowserAction, ...] = (
         "Stop because a person must take over, or no listed control can advance the goal",
     ),
 )
+
+# Closed wait budgets. Jev picks the id; code owns the duration.
+WAIT_BUDGET_MS: dict[str, int] = {
+    "short": 1_500,
+    "content": 5_000,
+}
+
+_PAGE_CONTROL_KINDS = frozenset({"click", "type", "select", "click_xy"})
+_LOADING_TEXT = re.compile(
+    r"\b(loading|please wait|still working|fetching|one moment|spinner)\b",
+    re.IGNORECASE,
+)
+
+# Sample the live DOM for settle. Avoid networkidle: analytics keep it busy forever.
+_DOM_SAMPLE_JS = """() => {
+  const root = document.querySelector('main') || document.body;
+  const text = (root && root.innerText) || '';
+  const busy = Boolean(
+    document.querySelector(
+      "[aria-busy='true'], [role='progressbar']:not([aria-hidden='true'])"
+    )
+  );
+  const controls = document.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), '
+    + 'select:not([disabled]), textarea:not([disabled]), [role="button"], '
+    + '[role="link"], [role="textbox"], [role="searchbox"], [role="combobox"]'
+  ).length;
+  const sig = text.slice(0, 500).replace(/\\s+/g, ' ').trim();
+  return { busy, controls, sig };
+}"""
 
 
 @dataclass
@@ -327,28 +371,40 @@ class BrowserSession:
             text = text[:cap] + "\n... text truncated."
         return text
 
+    async def settle(self, *, timeout_ms: int = 8_000) -> None:
+        """Wait until the current page looks finished updating."""
+        page = await self.page()
+        await settle_page(page, timeout_ms=timeout_ms)
+
+    async def wait_ready(self, budget: str = "content") -> None:
+        """Wait using a closed budget id (short or content)."""
+        timeout_ms = WAIT_BUDGET_MS.get(budget, WAIT_BUDGET_MS["content"])
+        await self.settle(timeout_ms=timeout_ms)
+
     async def click_ref(self, ref: str) -> None:
         page, locator = await self.resolve(ref)
         await locator.scroll_into_view_if_needed(timeout=5_000)
         await locator.click(timeout=15_000)
-        await _settle(page)
+        await settle_page(page)
 
     async def fill_ref(self, ref: str, text: str) -> None:
-        _, locator = await self.resolve(ref)
+        page, locator = await self.resolve(ref)
         await locator.scroll_into_view_if_needed(timeout=5_000)
         await locator.fill(text, timeout=15_000)
+        await settle_page(page, timeout_ms=4_000)
 
     async def select_ref(self, ref: str, value: str) -> None:
-        _, locator = await self.resolve(ref)
+        page, locator = await self.resolve(ref)
         try:
             await locator.select_option(label=value, timeout=10_000)
         except PlaywrightError:
             await locator.select_option(value=value, timeout=10_000)
+        await settle_page(page, timeout_ms=4_000)
 
     async def press_key(self, key: str) -> None:
         page = await self.page()
         await page.keyboard.press(key)
-        await _settle(page)
+        await settle_page(page)
 
     async def scroll_page(self, direction: str, *, pages: float = 1.0) -> None:
         page = await self.page()
@@ -371,7 +427,7 @@ class BrowserSession:
     async def click_xy(self, x: float, y: float) -> None:
         page = await self.page()
         await page.mouse.click(x, y)
-        await _settle(page)
+        await settle_page(page)
 
     # ------------------------------------------------------------- screenshots
 
@@ -582,7 +638,7 @@ def catalog_from_snapshot(text: str, *, limit: int = _MAX_MARKS) -> list[Browser
     """Turn an AI-mode accessibility snapshot into the only actions Jev may pick.
 
     Layout nodes are dropped. At most ``limit`` page controls are kept, then the
-    standing actions (scroll, keys, done, ask_user) are appended.
+    standing actions (scroll, wait, keys, done, ask_user) are appended.
     """
     found: list[BrowserAction] = []
     seen: set[str] = set()
@@ -613,6 +669,19 @@ def catalog_from_snapshot(text: str, *, limit: int = _MAX_MARKS) -> list[Browser
     return [*found, *STANDING_ACTIONS]
 
 
+def looks_loading(*, visible_text: str, actions: Sequence[BrowserAction]) -> bool:
+    """True when the snapshot still looks mid-load and acting would be premature.
+
+    Pure heuristic for the drive loop: empty catalogs, or loading copy with almost
+    no interactive controls. Busy pages with real controls are left alone.
+    """
+    controls = [action for action in actions if action.kind in _PAGE_CONTROL_KINDS]
+    if not controls:
+        return True
+    head = visible_text[:800]
+    return bool(_LOADING_TEXT.search(head) and len(controls) < 4)
+
+
 def _role_of(desc: str) -> str:
     token = desc.strip().split(maxsplit=1)[0] if desc.strip() else ""
     return token.strip('":').lower()
@@ -623,12 +692,49 @@ def _clean_description(desc: str) -> str:
     return desc[:80] or "element"
 
 
-async def _settle(page: Page) -> None:
-    """Give a click or keypress a moment to navigate before the next read."""
+async def settle_page(page: Page, *, timeout_ms: int = 8_000) -> None:
+    """Wait until navigation or an action's side-effects look finished.
+
+    Uses ``domcontentloaded``, then a short DOM-quiet window. Avoids
+    ``networkidle`` because analytics and long-polling keep the network busy.
+    """
     try:
-        await page.wait_for_load_state("domcontentloaded", timeout=8_000)
+        await page.wait_for_load_state("domcontentloaded", timeout=min(timeout_ms, 8_000))
     except PlaywrightError:
         pass
+    quiet_ms = min(max(timeout_ms, 0), 5_000)
+    if quiet_ms:
+        await _wait_dom_quiet(page, timeout_ms=quiet_ms)
+
+
+async def _wait_dom_quiet(page: Page, *, timeout_ms: int) -> None:
+    """Require two matching non-busy DOM samples ~300ms apart, or hit the budget."""
+    sample_gap_ms = 300
+    needed = 2
+    deadline = time.monotonic() + (timeout_ms / 1000.0)
+    last: dict[str, object] | None = None
+    stable = 0
+    while time.monotonic() < deadline:
+        try:
+            sample = await page.evaluate(_DOM_SAMPLE_JS)
+        except PlaywrightError:
+            return
+        if not isinstance(sample, dict):
+            return
+        if last is not None and sample == last and not sample.get("busy"):
+            stable += 1
+            if stable >= needed:
+                return
+        else:
+            stable = 0
+        last = sample
+        remaining_ms = int((deadline - time.monotonic()) * 1000)
+        if remaining_ms <= 0:
+            break
+        try:
+            await page.wait_for_timeout(min(sample_gap_ms, remaining_ms))
+        except PlaywrightError:
+            return
 
 
 def _draw_marks(image: Image.Image, marks: list[Mark]) -> Image.Image:

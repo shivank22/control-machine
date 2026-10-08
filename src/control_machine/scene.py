@@ -37,16 +37,11 @@ class SceneCallback:
 
     async def refresh(self, reason: str) -> str:
         """Re-read the live page and attach a fresh screenshot for the model."""
-        page = await self.session.page()
-        # MFA and SSO often redirect after the human finishes; wait briefly.
+        # MFA and SSO often redirect after the human finishes; wait for a quiet page.
         try:
-            await page.wait_for_load_state("domcontentloaded", timeout=8_000)
-        except PlaywrightError:
-            pass
-        try:
-            await page.wait_for_timeout(800)
-        except PlaywrightError:
-            pass
+            await self.session.settle(timeout_ms=8_000)
+        except (BrowserError, PlaywrightError):
+            log.warning("Scene settle failed after user intervention", exc_info=True)
 
         note = f"Live browser update after user intervention: {reason}"
         try:

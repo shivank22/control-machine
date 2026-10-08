@@ -17,7 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from playwright.async_api import Error as PlaywrightError
 from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, TypeSafeError
 
-from .browser import BrowserAction, BrowserError, BrowserSession
+from .browser import BrowserAction, BrowserError, BrowserSession, looks_loading
 from .config import Settings
 
 log = logging.getLogger(__name__)
@@ -30,6 +30,8 @@ MIN_MARGIN = 0.08
 SENSITIVE_YES = 0.65
 GOAL_DONE_YES = 0.6
 _RECENT_LIMIT = 8
+# Cap automatic pre-judgment waits so a blank page cannot burn the whole step budget.
+_MAX_AUTO_WAITS = 2
 _TYPE_INSTRUCTIONS = (
     "Reply with only the characters to type into this field. "
     "No quotes, labels, or explanation."
@@ -62,6 +64,8 @@ def questions_for(actions: list[BrowserAction]) -> dict[str, Choice | Noul]:
             instructions=(
                 "Which one next action best advances `goal` on this page? "
                 "Pick an action id from `actions`. "
+                "Choose wait:short or wait:content when the page is still loading "
+                "or updating and no control is ready yet. "
                 "Choose done only when the goal is already achieved. "
                 "Choose ask_user when no listed control can advance the goal, "
                 "or a person must take over. "
@@ -152,6 +156,7 @@ async def drive_browser(
     steps: list[str] = []
     model_name = JEV_MODEL
     failures = 0
+    auto_waits = 0
     url, title, text = "", "", ""
     try:
         async with AsyncTypeSafeClient(api_key=key, model=JEV_MODEL) as client:
@@ -159,6 +164,14 @@ async def drive_browser(
                 if running is not None:
                     await running.wait()
                 actions, url, title, text = await _read_page(session, settings)
+                if auto_waits < _MAX_AUTO_WAITS and looks_loading(
+                    visible_text=text,
+                    actions=actions,
+                ):
+                    await session.wait_ready("content")
+                    auto_waits += 1
+                    steps.append("wait:auto page still looked like it was loading")
+                    actions, url, title, text = await _read_page(session, settings)
                 known = {action.id: action for action in actions}
                 response = await client.system_one(
                     state=control_state(
@@ -300,6 +313,9 @@ async def _perform(
             )
         await session.fill_ref(action.ref, typed)
         return f"{action.id} {action.description} entered {typed!r} (p={decision.top:.2f})"
+    elif action.kind == "wait":
+        await session.wait_ready(action.value or "content")
+        return f"{action.id} {action.description} (p={decision.top:.2f})"
     elif action.kind == "scroll":
         await session.scroll_page(action.value or "down")
     elif action.kind == "key":
@@ -353,6 +369,9 @@ def _plain_text(message: Any) -> str:
 
 
 def _repeating(steps: list[str], action_id: str) -> bool:
+    # Waiting twice is often correct on slow SPAs; do not treat it as a stuck loop.
+    if action_id.startswith("wait:"):
+        return False
     tail = [_step_id(step) for step in steps[-2:]]
     return len(tail) == 2 and tail[0] == action_id and tail[1] == action_id
 
