@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from control_machine.browser import catalog_from_snapshot
+from control_machine.browser import WAIT_BUDGET_MS, catalog_from_snapshot, looks_loading
 from control_machine.config import Settings
 from control_machine.jev_browser import (
     MIN_MARGIN,
     MIN_TOP_PROBABILITY,
+    _repeating,
     choice_criteria,
     decide,
     drive_browser,
@@ -44,13 +45,20 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("click:e99", criteria)
         self.assertNotIn("click:e999", criteria)
         self.assertIn("scroll:down", criteria)
+        self.assertIn("wait:short", criteria)
+        self.assertIn("wait:content", criteria)
         self.assertIn("done", criteria)
         self.assertIn("ask_user", criteria)
+        self.assertIn("wait", questions["next_action"].instructions)
 
         by_id = {action.id: action for action in actions}
         self.assertEqual(by_id["type:e14"].kind, "type")
         self.assertEqual(by_id["click:e12"].kind, "click")
         self.assertEqual(by_id["click:e12"].ref, "e12")
+        self.assertEqual(by_id["wait:short"].kind, "wait")
+        self.assertEqual(by_id["wait:content"].value, "content")
+        self.assertEqual(WAIT_BUDGET_MS["short"], 1_500)
+        self.assertEqual(WAIT_BUDGET_MS["content"], 5_000)
 
     def test_caps_page_controls_and_keeps_standing_actions(self) -> None:
         lines = "\n".join(f'- button "B{i}" [ref=e{i}]' for i in range(1, 71))
@@ -59,7 +67,29 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(len(clicks), 60)
         self.assertEqual(clicks[-1].ref, "e60")
         self.assertIn("done", {action.id for action in actions})
+        self.assertIn("wait:content", {action.id for action in actions})
         self.assertNotIn("click:e61", {action.id for action in actions})
+
+
+class LoadingGateTests(unittest.TestCase):
+    def test_empty_catalog_looks_loading(self) -> None:
+        actions = catalog_from_snapshot("- generic \"shell\" [ref=e1]")
+        self.assertTrue(looks_loading(visible_text="", actions=actions))
+
+    def test_loading_copy_with_few_controls(self) -> None:
+        actions = catalog_from_snapshot('- button "Cancel" [ref=e2]')
+        self.assertTrue(
+            looks_loading(visible_text="Loading your timesheet…", actions=actions)
+        )
+
+    def test_ready_page_with_controls_does_not_look_loading(self) -> None:
+        actions = catalog_from_snapshot(_SNAPSHOT)
+        self.assertFalse(
+            looks_loading(
+                visible_text="Search flights from Zurich to London",
+                actions=actions,
+            )
+        )
 
 
 class DecideTests(unittest.TestCase):
@@ -138,6 +168,19 @@ class DecideTests(unittest.TestCase):
 
 
 class DriveGuardTests(unittest.TestCase):
+    def test_wait_actions_are_allowed_to_repeat(self) -> None:
+        steps = [
+            "wait:content Wait for loading content (p=0.70)",
+            "wait:content Wait for loading content (p=0.65)",
+        ]
+        self.assertFalse(_repeating(steps, "wait:content"))
+        self.assertTrue(
+            _repeating(
+                ["click:e12 Search (p=0.80)", "click:e12 Search (p=0.70)"],
+                "click:e12",
+            )
+        )
+
     def test_missing_key_does_not_touch_the_browser(self) -> None:
         settings = Settings(typesafe_api_key="", llm_provider="ollama")
 

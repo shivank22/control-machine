@@ -1,9 +1,9 @@
 """The browser tool surface the specialist model is allowed to call.
 
 The model opens a known URL, reads the page, and hands the goal to ``browser_drive``.
-Jev then picks one id from the page catalog. Click, type, select, key, scroll, and
-coordinate clicks stay on ``BrowserSession`` and are performed by that loop, not chosen
-by the model.
+Jev then picks one id from the page catalog. Click, type, select, key, scroll, wait,
+and coordinate clicks stay on ``BrowserSession`` and are performed by that loop, not
+chosen by the model.
 """
 
 from __future__ import annotations
@@ -88,6 +88,7 @@ def build_browser_tools(
         try:
             page = await session.page()
             await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            await session.settle()
             vision.clear()
             return await observe(f"Opened {url}")
         except (BrowserError, PlaywrightError) as exc:
