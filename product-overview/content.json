@@ -1,0 +1,76 @@
+{
+  "title": "Control Machine",
+  "subtitle": "A factory of agents. Each agent has one computer and one Telegram chat. The computer does the work.",
+  "author": "Shivank.sharma@wipro.com",
+  "footer": "AI-Council Switzerland",
+  "index_intro": "Control Machine keeps a factory of agents on the platform. Each agent has its own Telegram chat and its own computer. For now that computer is a Mac. In the enterprise case it is a VM, at Daytona, on Azure, or with another provider. The connector on that computer dials out. These pages cover the product, the services it runs on, who it is for, and why the pause stays in the same chat. Start with the introduction for the loop: ask, act, pause, reply. Core Features and Infra is the Factory, the bot, Postgres, Chrome, and the live socket. The later pages say who gains from that arrangement, and the close puts the same loop in one place. The sample throughout is Office filling a MyWipro timesheet on its Mac.",
+  "sections": [
+    {
+      "heading": "Introduction",
+      "index": "A factory of agents. Each agent has one computer and one Telegram chat. The timesheet run is the example of a pause.",
+      "body": [
+        "Control Machine is a factory of agents. Each agent has its own Telegram bot, and the person talks to that bot in one chat. Each agent also has its own computer. The agent decides what to do. That computer carries it out.",
+        "The platform stays up when the computer is off. The agent, its memory, its skills, and its activity stay readable. A connector on that computer dials out. While that connection is quiet, the agent refuses machine work and says so in the chat. For now the computer is a Mac. In the enterprise case it is a VM, at Daytona, on Azure, or with another provider. The provider names where the VM runs. The connector is the same.",
+        "Office, Sales, and Coder are the first three. Office fills a timesheet on its Mac and is the run that shows a pause. Sales works a pipeline on its own computer. Coder reads the repo on its own computer and asks before it writes. Opening one in the Factory loads that agent: its prompt, its skills, its memory, its tools, and its computer.",
+        "A sensitive step stops. A sign-in, a code, or a submit is that kind of step. The agent waits. The person answers in the same Telegram chat, or opens the live desktop from the phone and finishes the step. The picture is a JPEG a few times a second on a signed socket. Taps and typing go back on that socket. The reply in the chat is what lets the same session continue.",
+        "The agent sees page text and screenshots. Passwords, the machine credential, bot tokens, and the keystrokes from the live desktop stay off the record.",
+        "A timesheet run shows the loop. The person asks Office, in its chat, to fill this week’s MyWipro efforts and to stop before submit. Office opens Chrome, reads the sign-in page, and pauses. The person signs in on the live desktop and replies in that chat. Office reads the page again, enters the hours, and stops once more before the form is sent.",
+        "Sales and Coder are created the same way. The Factory row saves the name, the job, and the one computer that agent controls. Connecting the bot starts a poller for that token. The first message compiles the graph from that agent’s prompt, skills, memory, and tools. Sales running does not take Office’s computer."
+      ]
+    },
+    {
+      "heading": "Core Features and Infra",
+      "index": "The factory, the bot for each agent, Postgres, Docker Chrome, and the JPEG socket. The diagram is on this page.",
+      "body": [
+        "The working surface is the Factory. Under each agent is the computer assigned to it.",
+        "- Factory lists the agents. Each card is one agent and its computer. New agent saves the name, the job, and that computer, then the bot is connected and the graph is compiled from that row.",
+        "- One Telegram bot per agent. The poller for that bot hears the chat. The token stays outside the tables.",
+        "- The Deep Agent for a message uses that agent’s prompt, skills, memory, and enabled tools. Browser and machine clicks start on. SAP stays off until the browser and the clicks cannot drive the screen.",
+        "- Postgres holds the agents, skills, memory, sessions, pauses, messages, and events. LangGraph checkpoints stay in their own tables.",
+        "- Docker Chrome is the browser on that agent’s computer. The agent reads the page and acts on element refs. The connector on that computer dials out to the platform.",
+        "- The live desktop is JPEG frames on a signed socket, injected with Accessibility. The private noVNC view stays inside the browser container."
+      ]
+    },
+    {
+      "heading": "Key Business Benefits",
+      "index": "Work starts in the chat you already use, on the computer you assigned to that agent. One session holds that computer.",
+      "body": [
+        "The gain is that each agent is a standing worker with a computer of its own.",
+        "- A job starts as a message. The person does not sit down at the computer to begin it, and the result comes back in the same chat.",
+        "- Each agent keeps its own skills and memory, so a timesheet routine and a pipeline routine do not share a conversation or a prompt.",
+        "- The platform keeps working while that computer is off. The agent can still chat. Machine work waits until its connector dials out.",
+        "- A login or a submit stops in the chat. The person finishes that step on the phone, and the same session continues.",
+        "- The browser, the files, and the screen stay on this computer. The credential that lets the connector dial out stays on the computer too.",
+        "A repeated job becomes a skill on that agent. The next time the person asks, the agent follows the same instructions and stops in the same places. The first timesheet teaches the handoff. The skill lets Office start it again.",
+        "That computer runs one intent. Office being paused does not block Sales, because Sales has its own computer. When a connector drops, a pause that was already waiting on that computer stays waiting until that connector dials out again.",
+        "The catalog grows by agent. A new skill is instructions on that agent. A new agent is another bot, another prompt, and another computer. The way you ask does not change."
+      ]
+    },
+    {
+      "heading": "Target Audience of Product",
+      "index": "Someone who wants a separate agent for a separate job, each agent on its own computer, reached from Telegram.",
+      "body": [
+        "Control Machine is for a person who already has the computer and the chat, and wants agents to take the screen work.",
+        "- Someone running a Mac for desk work now, with a phone as the way in. Enterprise gives that same agent a VM at Daytona, on Azure, or with another provider.",
+        "- A person who wants a separate agent for separate jobs, such as timesheets, a pipeline, and a repo, each with its own bot and its own computer.",
+        "- An operator who must sign in or approve a submit themselves, then let the agent continue from the page already open.",
+        "- A team that can share the pattern while each person runs their own machine and their own bots.",
+        "The tools stay familiar. Telegram is the conversation. Chrome and the apps on that agent’s computer are the surface the agent operates. The Factory is where those agents are listed and opened.",
+        "The day looks like this. The person opens Telegram, picks the bot for the job, and writes the ask. If that agent’s computer is on, that agent takes the session on it. If a page asks for a password, the chat receives the pause and a link to that screen. After the reply, the agent finishes and the chat holds the record.",
+        "It fits the person who files the same form every week, the person who drafts in a browser and wants a check before anything is sent, and the person who wants an agent to read a repo and stop before it writes. Each of those is a different agent, on its own computer. The Factory is the list they open. The chat is the only conversation each agent has."
+      ]
+    },
+    {
+      "heading": "Conclusion",
+      "index": "Ask in Telegram. That agent works on its own computer. You step in only for the step that is yours. The chat keeps the record.",
+      "body": [
+        "Control Machine connects each agent to one computer. You ask in that agent’s Telegram chat. The agent decides. Its computer does the work when that connector is online, and one intent at a time on that computer.",
+        "The loop is the same for every agent. A message starts the session. If a sign-in or an approval appears, the agent waits and the phone can show the screen. The reply in the same chat continues the session. The live desktop writes nothing.",
+        "Office, Sales, and Coder are three workers on that pattern. Prompt, skills, memory, tools, the bot, and the computer belong to each of them. Office’s Mac being asleep does not stop Sales on its own machine.",
+        "Use it when the work is on the screen and you are somewhere else. Ask the agent. Let it run what it can. Take the step that belongs to you. Read the result in the same chat.",
+        "What a run writes is the ask, one session, the events along the way, and a pause when it has to wait. The person’s reply answers that pause. The live desktop writes nothing. Signing in does not put a password in the chat or in the activity.",
+        "The agents are the workers. The skill is the job an agent can repeat. The chat is where you ask and where the agent asks you back. The computer is the one machine that agent controls, and it joins the work only while its connector is dialed out. For now that machine is a Mac. Enterprise gives the agent a VM. Connecting a new agent adds a row, a bot, a computer, and a graph compiled from that agent’s own prompt."
+      ]
+    }
+  ]
+}

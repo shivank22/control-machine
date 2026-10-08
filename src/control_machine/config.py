@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     live_link_secret: str = ""
     live_link_ttl_seconds: int = Field(default=86400, ge=60)
 
+    # Factory JSON. The workspace key is presented once at login. The session
+    # secret signs the bearer. Neither value is a table column.
+    factory_access_key: str = ""
+    factory_session_secret: str = ""
+    factory_session_ttl_seconds: int = Field(default=43200, ge=60)
+
     telegram_bot_token: str = ""
     telegram_allowlist: str = ""
     telegram_notify_chat_id: str = ""

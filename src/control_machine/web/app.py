@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from ..access import FactorySessions
 from ..browser import BrowserError, BrowserPool
 from ..config import get_settings
 from ..db import Database
@@ -41,6 +42,7 @@ from ..scheduler import (
 from ..telegram import TelegramBridge
 from ..tracing import configure_logging
 from .live import router as live_router
+from .session import router as session_router
 
 log = logging.getLogger(__name__)
 
@@ -90,11 +92,13 @@ def create_app() -> FastAPI:
         pool = BrowserPool.from_settings()
         bus = EventBus()
         live = LiveSessions(settings)
+        factory_sessions = FactorySessions(settings)
         live_http = httpx.AsyncClient(timeout=30.0, follow_redirects=False)
         app.state.db = db
         app.state.pool = pool
         app.state.bus = bus
         app.state.live = live
+        app.state.factory_sessions = factory_sessions
         app.state.live_http = live_http
         app.state.runner = RunManager(db=db, pool=pool, bus=bus, settings=settings)
 
@@ -132,6 +136,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="control-machine", lifespan=lifespan)
     app.include_router(live_router)
+    app.include_router(session_router)
     app.mount("/runs", StaticFiles(directory=str(settings.runs_dir)), name="runs")
 
     @app.exception_handler(Exception)
