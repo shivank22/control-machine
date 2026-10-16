@@ -25,9 +25,11 @@ from sse_starlette.sse import EventSourceResponse
 
 from ..access import FactorySessions
 from ..browser import BrowserError, BrowserPool
-from ..config import get_settings
+from ..config import PROJECT_ROOT, get_settings
 from ..db import Database
 from ..events import EventBus
+from ..factory.api import router as factory_router
+from ..factory.live_links import FactoryLiveLinks
 from ..live import LiveSessions, open_live_session
 from ..runner import RunManager, RunnerBusy
 from ..scheduler import (
@@ -93,11 +95,23 @@ def create_app() -> FastAPI:
         bus = EventBus()
         live = LiveSessions(settings)
         factory_sessions = FactorySessions(settings)
+        factory = db.factory  # type: ignore[attr-defined]
+        factory_live = FactoryLiveLinks(settings)
+        async with db.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT jti FROM factory_session_revocations
+                 WHERE expires_at > now()
+                """
+            )
+            factory_sessions.load_revocations({r["jti"] for r in await cur.fetchall()})
         live_http = httpx.AsyncClient(timeout=30.0, follow_redirects=False)
         app.state.db = db
         app.state.pool = pool
         app.state.bus = bus
         app.state.live = live
+        app.state.factory = factory
+        app.state.factory_live = factory_live
         app.state.factory_sessions = factory_sessions
         app.state.live_http = live_http
         app.state.runner = RunManager(db=db, pool=pool, bus=bus, settings=settings)
@@ -137,7 +151,24 @@ def create_app() -> FastAPI:
     app = FastAPI(title="control-machine", lifespan=lifespan)
     app.include_router(live_router)
     app.include_router(session_router)
+    app.include_router(factory_router)
+    research_dir = PROJECT_ROOT / "research"
+    if research_dir.is_dir():
+        app.mount(
+            "/factory-assets",
+            StaticFiles(directory=str(research_dir)),
+            name="factory-assets",
+        )
+        app.mount(
+            "/factory/mock",
+            StaticFiles(directory=str(research_dir), html=True),
+            name="factory-mock",
+        )
     app.mount("/runs", StaticFiles(directory=str(settings.runs_dir)), name="runs")
+
+    @app.get("/factory", response_class=HTMLResponse)
+    async def factory_app(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "factory.html", {})
 
     @app.exception_handler(Exception)
     async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:

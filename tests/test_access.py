@@ -123,6 +123,7 @@ class FactorySessionTests(unittest.TestCase):
         self.assertTrue(session_is_open("paused"))
         self.assertFalse(session_is_open("done"))
         self.assertTrue(tool_name_ok("browser"))
+        self.assertTrue(tool_name_ok("files"))
         self.assertFalse(tool_name_ok("shell"))
         bot = public_bot(bot_id=1, username="office_bot", chat_id=9)
         self.assertEqual(bot, {"id": 1, "username": "office_bot", "connected": True})

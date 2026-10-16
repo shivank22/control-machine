@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factory — Control Machine</title>
+  <link rel="stylesheet" href="/factory-assets/mock.css">
+  <style>
+    .login-wrap {
+      min-height: 100vh; display: grid; place-items: center;
+      background: linear-gradient(160deg, #f5f6fb 0%, #ebe8ff 45%, #f7f8fc 100%);
+    }
+    .login-card {
+      width: min(380px, 92vw); background: #fff; border: 1px solid var(--line);
+      border-radius: 16px; padding: 28px 24px; box-shadow: 0 12px 40px rgba(28,30,42,.06);
+    }
+    .login-card h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.03em; }
+    .login-card p { margin: 0 0 18px; color: var(--muted); }
+    .login-card .field { display: block; margin-bottom: 12px; }
+    .login-card .field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .login-card input {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; background: #fbfbfe;
+    }
+    .login-card .err { color: #b42318; font-size: 12px; margin: 0 0 10px; min-height: 1.2em; }
+    .empty-state { padding: 48px 24px; text-align: center; color: var(--muted); }
+    .cred-banner {
+      margin: 12px 0; padding: 12px 14px; border-radius: 10px;
+      background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 12.5px;
+    }
+    .cred-banner code { display: block; margin-top: 6px; word-break: break-all; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div id="login" class="login-wrap" hidden>
+    <div class="login-card">
+      <div class="brand" style="padding:0 0 16px">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4"><path d="M12 3l1.6 4.8L18.5 9.5 13.6 11.1 12 16l-1.6-4.9L6 9.5l4.4-1.7z"/></svg>
+        </span>
+        <div class="brand-name">Control Machine</div>
+      </div>
+      <h1>Factory</h1>
+      <p>One person, one Factory. Enter the access key to continue.</p>
+      <p class="err" id="login-err"></p>
+      <label class="field"><span>Access key</span><input id="access-key" type="password" autocomplete="current-password"></label>
+      <button class="btn primary" type="button" id="login-btn" style="width:100%">Sign in</button>
+    </div>
+  </div>
+
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4"><path d="M12 3l1.6 4.8L18.5 9.5 13.6 11.1 12 16l-1.6-4.9L6 9.5l4.4-1.7z"/></svg>
+        </span>
+        <div class="brand-name">Control Machine</div>
+      </div>
+      <button class="nav-link is-here" data-nav="factory" type="button" id="nav-factory">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>
+        Factory
+      </button>
+      <button class="nav-link" data-nav="agent" type="button" id="nav-agent" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3"/><rect x="4" y="6" width="16" height="12" rx="2"/></svg>
+        Agent
+      </button>
+      <div class="nav-label">Agents</div>
+      <div id="recent-list"></div>
+      <div class="sidebar-foot">
+        <div class="side-status">
+          <i class="led" id="side-led"></i>
+          <div>
+            <b id="side-label">Factory</b>
+            <span id="side-detail" style="display:block;color:var(--muted);font-size:12px">Sign out clears this session</span>
+          </div>
+        </div>
+        <button class="btn" type="button" id="logout" style="margin-top:10px;width:100%">Sign out</button>
+      </div>
+    </aside>
+
+    <div class="workspace-col">
+      <header class="topbar">
+        <div class="crumb"><span id="crumb-section">Factory</span> <span>/</span> <strong id="crumb-name">All agents</strong></div>
+      </header>
+      <div class="page">
+        <section id="view-factory">
+          <div class="factory-head">
+            <div>
+              <h1>Factory</h1>
+              <p>Every agent has its own bot and computer. Open one to work on it.</p>
+            </div>
+            <button class="btn primary" type="button" id="new-agent">+ New agent</button>
+          </div>
+          <div class="panel" id="new-agent-form" hidden style="min-height:0;padding:16px;margin-bottom:16px">
+            <h2 style="margin:0 0 10px">New agent</h2>
+            <label class="field"><span>Name</span><input id="new-agent-name" placeholder="Office"></label>
+            <label class="field" style="margin-top:10px"><span>What it does</span><input id="new-agent-job" placeholder="Fills the timesheet and other desk work"></label>
+            <label class="field" style="margin-top:10px"><span>Computer</span><input id="new-computer-name" placeholder="This Mac" value="This Mac"></label>
+            <label class="field" style="margin-top:10px"><span>Kind</span>
+              <select id="new-computer-kind">
+                <option value="mac">Mac (local)</option>
+                <option value="vm">VM</option>
+              </select>
+            </label>
+            <label class="field" id="provider-field" style="margin-top:10px" hidden>
+              <span>Provider</span><input id="new-computer-provider" placeholder="daytona">
+            </label>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="btn primary" type="button" id="create-agent">Create</button>
+              <button class="btn" type="button" id="cancel-agent">Cancel</button>
+            </div>
+            <div class="cred-banner" id="cred-banner" hidden>
+              Connector credential (shown once). Save it on the computer.
+              <code id="cred-value"></code>
+            </div>
+          </div>
+          <div class="factory-grid" id="factory-grid"></div>
+          <div class="empty-state" id="factory-empty" hidden>No agents yet. Create one to start.</div>
+        </section>
+
+        <section id="view-agent" hidden>
+          <div class="agent-head">
+            <div class="agent-avatar" id="agent-avatar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3"/><rect x="4" y="6" width="16" height="12" rx="2"/></svg>
+            </div>
+            <div>
+              <h1 id="agent-name">—</h1>
+              <p id="agent-desc"></p>
+            </div>
+            <div class="head-actions">
+              <button class="btn" type="button" id="save-agent">Save</button>
+              <a class="btn" id="open-chat" href="#">Telegram</a>
+              <button class="btn primary" type="button" id="open-desktop">Open desktop</button>
+            </div>
+          </div>
+          <div class="tabs" role="tablist">
+            <button type="button" data-tab="builder" class="is-here">Builder</button>
+            <button type="button" data-tab="memory">Memory</button>
+            <button type="button" data-tab="skills">Skills</button>
+            <button type="button" data-tab="activity">Activity</button>
+            <button type="button" data-tab="messages">Chat</button>
+            <button type="button" data-tab="machine">Machine</button>
+          </div>
+
+          <div id="tab-builder">
+            <div class="runbar" id="runbar">
+              <span id="runbar-title">Idle</span>
+              <span id="runbar-detail">No open session.</span>
+              <button class="btn" type="button" id="cancel-session" hidden>Cancel session</button>
+            </div>
+            <div class="panel" style="padding:16px;margin-top:12px">
+              <h2 style="margin:0 0 8px">Agent details</h2>
+              <label class="field"><span>Name</span><input id="edit-name"></label>
+              <label class="field" style="margin-top:10px"><span>Description</span><textarea id="edit-desc" rows="2"></textarea></label>
+              <label class="field" style="margin-top:10px"><span>System prompt</span><textarea id="edit-prompt" rows="5"></textarea></label>
+              <div style="margin-top:14px">
+                <h3 style="margin:0 0 8px;font-size:13px">Tools</h3>
+                <div id="tools-list"></div>
+              </div>
+              <div style="margin-top:14px" id="computer-card"></div>
+            </div>
+          </div>
+
+          <div id="tab-memory" hidden>
+            <div class="panel" style="padding:16px;margin-top:12px">
+              <div id="memories"></div>
+              <div class="empty-state" id="memory-empty" hidden>No notes yet. The agent writes these when it learns something.</div>
+            </div>
+          </div>
+
+          <div id="tab-skills" hidden>
+            <div class="panel" style="padding:16px;margin-top:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <h2 style="margin:0">Skills</h2>
+                <button class="btn" type="button" id="add-skill">+ Skill</button>
+              </div>
+              <div id="skill-form" hidden style="margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:10px">
+                <label class="field"><span>Name</span><input id="skill-name"></label>
+                <label class="field" style="margin-top:8px"><span>When to use it</span><input id="skill-desc"></label>
+                <label class="field" style="margin-top:8px"><span>Instructions</span><textarea id="skill-body" rows="4"></textarea></label>
+                <div style="margin-top:10px;display:flex;gap:8px">
+                  <button class="btn primary" type="button" id="save-skill">Save skill</button>
+                  <button class="btn" type="button" id="cancel-skill">Cancel</button>
+                </div>
+              </div>
+              <div id="skills-body"></div>
+            </div>
+          </div>
+
+          <div id="tab-activity" hidden>
+            <div class="panel" style="padding:16px;margin-top:12px">
+              <div id="activity-body"></div>
+              <div class="empty-state" id="activity-empty" hidden>No activity for this session.</div>
+            </div>
+          </div>
+
+          <div id="tab-messages" hidden>
+            <div class="panel" style="padding:16px;margin-top:12px;display:flex;flex-direction:column;gap:12px;min-height:360px">
+              <div id="messages-body" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px"></div>
+              <div style="display:flex;gap:8px">
+                <input id="message-input" placeholder="Message this agent…" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                <button class="btn primary" type="button" id="send-message">Send</button>
+              </div>
+              <p id="message-err" class="err" style="margin:0;color:#b42318;font-size:12px;min-height:1em"></p>
+            </div>
+          </div>
+
+          <div id="tab-machine" hidden>
+            <div class="panel" style="padding:16px;margin-top:12px" id="machine-body"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TOKEN_KEY = "cm_factory_token";
+    let token = localStorage.getItem(TOKEN_KEY) || "";
+    let agents = [];
+    let currentId = null;
+    let detail = null;
+    let pollTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    async function api(path, opts = {}) {
+      const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(path, { ...opts, headers });
+      if (res.status === 401) {
+        clearSession();
+        showLogin("Session expired. Sign in again.");
+        throw new Error("unauthorized");
+      }
+      if (res.status === 204) return null;
+      const text = await res.text();
+      let body = null;
+      try { body = text ? JSON.parse(text) : null; } catch { body = { detail: text }; }
+      if (!res.ok) {
+        const err = new Error((body && body.detail) || res.statusText);
+        err.status = res.status;
+        err.body = body;
+        throw err;
+      }
+      return body;
+    }
+
+    function clearSession() {
+      token = "";
+      localStorage.removeItem(TOKEN_KEY);
+      if (pollTimer) clearInterval(pollTimer);
+    }
+
+    function showLogin(msg = "") {
+      $("login").hidden = false;
+      $("shell").hidden = true;
+      $("login-err").textContent = msg;
+    }
+
+    function showShell() {
+      $("login").hidden = true;
+      $("shell").hidden = false;
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function statusPill(status) {
+      if (status === "paused") return '<span class="pill wait">Paused</span>';
+      if (status === "running") return '<span class="pill">Running</span>';
+      return '<span class="pill off">Idle</span>';
+    }
+
+    async function login() {
+      const key = $("access-key").value;
+      try {
+        const body = await api("/api/session", { method: "POST", body: JSON.stringify({ key }) });
+        token = body.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        showShell();
+        await refreshFactory();
+        startPoll();
+      } catch (e) {
+        $("login-err").textContent = e.message || "Sign in failed.";
+      }
+    }
+
+    async function logout() {
+      try { await api("/api/session", { method: "DELETE" }); } catch {}
+      clearSession();
+      showLogin();
+    }
+
+    async function refreshFactory() {
+      agents = await api("/api/agents");
+      renderFactory();
+      renderRecent();
+      if (currentId) await openAgent(currentId, false);
+    }
+
+    function renderFactory() {
+      const grid = $("factory-grid");
+      $("factory-empty").hidden = agents.length > 0;
+      grid.innerHTML = agents.map(a => {
+        const soft = a.avatar_color + "22";
+        return `<button class="agent-card" type="button" data-open="${a.id}">
+          <span class="mark" style="background:${esc(soft)};color:${esc(a.avatar_color)}">${esc((a.name||"?").slice(0,1).toUpperCase())}</span>
+          <h2>${esc(a.name)}</h2>
+          <p class="desc">${esc(a.description || "")}</p>
+          <div class="meta">${statusPill(a.status)}${(a.tags||[]).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+            <span class="tag">${esc(a.computer?.kind || "")} · ${esc(a.computer?.status || "")}</span>
+          </div>
+          <span class="open">Open agent</span>
+        </button>`;
+      }).join("");
+    }
+
+    function renderRecent() {
+      $("recent-list").innerHTML = agents.map(a =>
+        `<button class="recent${a.id === currentId ? " is-here" : ""}" type="button" data-open="${a.id}"><i></i> ${esc(a.name)}</button>`
+      ).join("");
+    }
+
+    async function openAgent(id, switchView = true) {
+      currentId = id;
+      detail = await api(`/api/agents/${id}`);
+      $("nav-agent").hidden = false;
+      if (switchView) showView("agent");
+      renderAgent();
+      renderRecent();
+      const tab = document.querySelector(".tabs .is-here")?.dataset.tab || "builder";
+      await loadTab(tab);
+    }
+
+    function renderAgent() {
+      const a = detail;
+      $("agent-name").textContent = a.name;
+      $("agent-desc").textContent = a.description || "";
+      $("crumb-name").textContent = a.name;
+      $("edit-name").value = a.name;
+      $("edit-desc").value = a.description || "";
+      $("edit-prompt").value = a.system_prompt || "";
+      $("agent-avatar").style.color = a.avatar_color;
+      $("agent-avatar").style.background = a.avatar_color + "22";
+      const online = a.computer?.status === "online";
+      document.body.classList.toggle("is-online", online);
+      document.body.classList.toggle("is-offline", !online);
+      $("side-label").textContent = online ? "Computer online" : "Computer offline";
+      $("side-detail").textContent = a.computer?.name || "";
+      if (a.session) {
+        $("runbar-title").textContent = `${a.session.status === "paused" ? "Paused" : "Running"} · ${a.session.title}`;
+        $("runbar-detail").textContent = a.pause?.question || a.session.page_title || "Open session on this computer.";
+        $("runbar").classList.toggle("idle", false);
+        $("cancel-session").hidden = false;
+      } else {
+        $("runbar-title").textContent = "Idle";
+        $("runbar-detail").textContent = "No open session. Send a chat message when the computer is online.";
+        $("runbar").classList.add("idle");
+        $("cancel-session").hidden = true;
+      }
+      $("tools-list").innerHTML = (a.tools || []).map(t =>
+        `<label style="display:flex;align-items:center;gap:8px;margin:6px 0">
+          <input type="checkbox" data-tool="${esc(t.name)}" ${t.enabled ? "checked" : ""}>
+          <span>${esc(t.name)}</span>
+        </label>`
+      ).join("");
+      $("computer-card").innerHTML = `
+        <h3 style="margin:0 0 6px;font-size:13px">Computer</h3>
+        <p style="margin:0;color:var(--muted)">${esc(a.computer?.name)} · ${esc(a.computer?.kind)} / ${esc(a.computer?.provider)} · ${esc(a.computer?.status)}</p>
+        <p style="margin:6px 0 0;color:var(--muted)">Bot: ${a.bot?.connected ? "@" + esc(a.bot.username) : "not connected"}</p>`;
+      $("machine-body").innerHTML = `
+        <h2 style="margin:0 0 8px">Machine</h2>
+        <p><strong>Connector</strong> — ${esc(a.computer?.status)} ${a.computer?.last_seen_at ? "(" + esc(a.computer.last_seen_at) + ")" : ""}</p>
+        <p><strong>Page</strong> — ${a.session?.page_title ? esc(a.session.page_title) + " · " + esc(a.session.page_url || "") : "No open browser page."}</p>`;
+    }
+
+    async function loadTab(name) {
+      if (!currentId) return;
+      if (name === "memory") {
+        const rows = await api(`/api/agents/${currentId}/memories`);
+        $("memory-empty").hidden = rows.length > 0;
+        $("memories").innerHTML = rows.map(m =>
+          `<div class="mem-row"><div><h3>${esc(m.body)}</h3><p>${esc(m.detail || "")}</p></div>
+           <button class="icon-btn" type="button" data-del-mem="${m.id}">Delete</button></div>`
+        ).join("");
+      }
+      if (name === "skills") {
+        const rows = await api(`/api/agents/${currentId}/skills`);
+        $("skills-body").innerHTML = rows.map(s =>
+          `<div class="skill-block"><div>${s.in_use ? '<p class="kind tried">In use</p>' : ""}
+           <h3>${esc(s.name)}</h3><p>${esc(s.description)}</p><p style="color:var(--muted)">${esc(s.body)}</p>
+           <button class="btn" type="button" data-del-skill="${s.id}" style="margin-top:8px">Delete</button></div></div>`
+        ).join("") || '<div class="empty-state">No skills yet.</div>';
+      }
+      if (name === "activity") {
+        const rows = await api(`/api/agents/${currentId}/events`);
+        $("activity-empty").hidden = rows.length > 0;
+        $("activity-body").innerHTML = rows.length ? `<div class="timeline">${rows.map(e =>
+          `<article class="event ${esc(e.kind)}"><time>${esc((e.created_at||"").slice(11,16))}</time>
+           <div class="rail"><i></i><span></span></div>
+           <div class="body"><p class="kind ${esc(e.kind)}">${esc(e.kind)}</p><strong>${esc(e.title)}</strong>
+           <p style="margin:4px 0 0;color:var(--muted)">${esc(e.body)}</p></div></article>`
+        ).join("")}</div>` : "";
+      }
+      if (name === "messages") {
+        const rows = await api(`/api/agents/${currentId}/messages`);
+        $("messages-body").innerHTML = rows.map(m =>
+          `<div style="align-self:${m.role === "user" ? "flex-end" : "flex-start"};max-width:80%;padding:10px 12px;border-radius:12px;background:${m.role === "user" ? "var(--purple-soft)" : "#f3f4f8"}">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${esc(m.role)}</div>
+            ${esc(m.body)}
+            ${m.pause_id ? '<div style="margin-top:6px"><em>Open desktop</em></div>' : ""}
+          </div>`
+        ).join("") || '<div class="empty-state">No messages yet.</div>';
+        $("messages-body").scrollTop = $("messages-body").scrollHeight;
+      }
+    }
+
+    function showView(name) {
+      $("view-factory").hidden = name !== "factory";
+      $("view-agent").hidden = name !== "agent";
+      $("crumb-section").textContent = name === "factory" ? "Factory" : "Agent";
+      if (name === "factory") $("crumb-name").textContent = "All agents";
+      $("nav-factory").classList.toggle("is-here", name === "factory");
+      $("nav-agent").classList.toggle("is-here", name === "agent");
+    }
+
+    function showTab(name) {
+      document.querySelectorAll(".tabs [data-tab]").forEach(el => el.classList.toggle("is-here", el.dataset.tab === name));
+      ["builder","memory","skills","activity","messages","machine"].forEach(t => {
+        $(`tab-${t}`).hidden = t !== name;
+      });
+      loadTab(name);
+    }
+
+    function startPoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          if (currentId && !$("view-agent").hidden) {
+            detail = await api(`/api/agents/${currentId}`);
+            renderAgent();
+          } else {
+            agents = await api("/api/agents");
+            renderFactory();
+            renderRecent();
+          }
+        } catch {}
+      }, 4000);
+    }
+
+    $("login-btn").onclick = login;
+    $("access-key").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+    $("logout").onclick = logout;
+    $("nav-factory").onclick = () => { showView("factory"); refreshFactory(); };
+    $("nav-agent").onclick = () => { if (currentId) showView("agent"); };
+
+    document.body.addEventListener("click", async (ev) => {
+      const open = ev.target.closest("[data-open]");
+      if (open) { await openAgent(Number(open.dataset.open)); return; }
+      const tab = ev.target.closest("[data-tab]");
+      if (tab) { showTab(tab.dataset.tab); return; }
+      const delMem = ev.target.closest("[data-del-mem]");
+      if (delMem) {
+        await api(`/api/agents/${currentId}/memories/${delMem.dataset.delMem}`, { method: "DELETE" });
+        await loadTab("memory");
+        return;
+      }
+      const delSkill = ev.target.closest("[data-del-skill]");
+      if (delSkill) {
+        await api(`/api/agents/${currentId}/skills/${delSkill.dataset.delSkill}`, { method: "DELETE" });
+        await loadTab("skills");
+      }
+    });
+
+    $("new-agent").onclick = () => { $("new-agent-form").hidden = false; $("cred-banner").hidden = true; };
+    $("cancel-agent").onclick = () => { $("new-agent-form").hidden = true; };
+    $("new-computer-kind").onchange = (e) => {
+      $("provider-field").hidden = e.target.value !== "vm";
+    };
+    $("create-agent").onclick = async () => {
+      const name = $("new-agent-name").value.trim();
+      if (!name) return;
+      const kind = $("new-computer-kind").value;
+      const computer = { name: $("new-computer-name").value.trim() || "This Mac", kind };
+      if (kind === "vm") computer.provider = $("new-computer-provider").value.trim() || "daytona";
+      try {
+        const created = await api("/api/agents", {
+          method: "POST",
+          body: JSON.stringify({ name, description: $("new-agent-job").value.trim(), computer }),
+        });
+        if (created.connector_credential) {
+          $("cred-banner").hidden = false;
+          $("cred-value").textContent = created.connector_credential;
+        }
+        $("new-agent-name").value = "";
+        $("new-agent-job").value = "";
+        await refreshFactory();
+        await openAgent(created.id);
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    $("save-agent").onclick = async () => {
+      await api(`/api/agents/${currentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: $("edit-name").value.trim(),
+          description: $("edit-desc").value,
+          system_prompt: $("edit-prompt").value,
+        }),
+      });
+      $("save-agent").textContent = "Saved";
+      setTimeout(() => { $("save-agent").textContent = "Save"; }, 900);
+      await openAgent(currentId, false);
+    };
+
+    $("tools-list").addEventListener("change", async (ev) => {
+      const input = ev.target.closest("[data-tool]");
+      if (!input) return;
+      await api(`/api/agents/${currentId}/tools/${input.dataset.tool}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: input.checked }),
+      });
+    });
+
+    $("add-skill").onclick = () => { $("skill-form").hidden = false; };
+    $("cancel-skill").onclick = () => { $("skill-form").hidden = true; };
+    $("save-skill").onclick = async () => {
+      await api(`/api/agents/${currentId}/skills`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("skill-name").value.trim(),
+          description: $("skill-desc").value.trim(),
+          body: $("skill-body").value.trim(),
+        }),
+      });
+      $("skill-form").hidden = true;
+      $("skill-name").value = "";
+      $("skill-desc").value = "";
+      $("skill-body").value = "";
+      await loadTab("skills");
+    };
+
+    $("send-message").onclick = async () => {
+      const body = $("message-input").value.trim();
+      if (!body) return;
+      $("message-err").textContent = "";
+      try {
+        await api(`/api/agents/${currentId}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        });
+        $("message-input").value = "";
+        detail = await api(`/api/agents/${currentId}`);
+        renderAgent();
+        await loadTab("messages");
+      } catch (e) {
+        $("message-err").textContent = e.message;
+      }
+    };
+    $("message-input").addEventListener("keydown", e => {
+      if (e.key === "Enter") $("send-message").click();
+    });
+
+    $("cancel-session").onclick = async () => {
+      await api(`/api/agents/${currentId}/session/cancel`, { method: "POST" });
+      await openAgent(currentId, false);
+    };
+
+    $("open-desktop").onclick = async () => {
+      try {
+        const link = await api(`/api/agents/${currentId}/desktop`, { method: "POST" });
+        window.open(link.url, "_blank");
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    (async function boot() {
+      if (!token) { showLogin(); return; }
+      try {
+        await api("/api/session");
+        showShell();
+        await refreshFactory();
+        startPoll();
+      } catch {
+        showLogin();
+      }
+    })();
+  </script>
+</body>
+</html>

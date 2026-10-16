@@ -18,7 +18,7 @@ from .config import Settings, get_settings
 
 ONLINE_WINDOW = timedelta(seconds=30)
 OPEN_SESSION_STATUSES = frozenset({"running", "paused"})
-TOOL_NAMES = frozenset({"browser", "clicks", "sap"})
+TOOL_NAMES = frozenset({"browser", "clicks", "files", "sap"})
 
 
 class SessionError(ValueError):
@@ -37,11 +37,19 @@ class FactorySession:
 
 
 class FactorySessions:
-    """Issue and check the workspace bearer. Revocation lives in this process."""
+    """Issue and check the workspace bearer.
+
+    Revocations are tracked in-process and mirrored to
+    ``factory_session_revocations`` so a restart still refuses logged-out
+    bearers. Load persisted jtis with :meth:`load_revocations` at startup.
+    """
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self._revoked: set[str] = set()
+
+    def load_revocations(self, jtis: set[str]) -> None:
+        self._revoked.update(jtis)
 
     def configured(self) -> bool:
         return bool(self._access_key) and bool(self._secret)
@@ -70,9 +78,10 @@ class FactorySessions:
             raise SessionError("Session is invalid or expired.")
         return FactorySession(expires_at=expires_at, jti=jti, token=token)
 
-    def revoke(self, token: str) -> None:
+    def revoke(self, token: str) -> FactorySession:
         session = self.verify(token)
         self._revoked.add(session.jti)
+        return session
 
     def _issue(self) -> FactorySession:
         expires_at = int(time.time()) + self.settings.factory_session_ttl_seconds
