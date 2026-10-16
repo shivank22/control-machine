@@ -100,7 +100,7 @@ These are the checks the agent follows. File and browser limits that already shi
 
 ## The computer
 
-Each agent controls one computer. The agent loop runs in the Factory. The connector on that computer dials out, authenticates with the credential that stays on the computer, and writes `computers.last_seen_at`. Tool calls travel back down that same outbound stream. That is the only way a decision becomes a click. No inbound port is opened for VNC. The protocol is [Connector](api.md#connector).
+Each agent controls one computer. The agent loop runs in the Factory. The connector on that computer dials out, authenticates with the credential that stays on the computer, and writes `computers.last_seen_at`. Tool calls travel back down the outbound WebSocket (`/api/connector/stream`). Observations return on that socket or as `POST /api/connector/result`. That is the only way a decision becomes a click. No inbound port is opened for VNC. The protocol is [Connector](api.md#connector).
 
 | `kind` | `provider` | Where it runs |
 | --- | --- | --- |

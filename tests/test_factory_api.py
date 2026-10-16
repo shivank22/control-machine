@@ -12,13 +12,14 @@ from fastapi.testclient import TestClient
 from control_machine.access import FactorySessions
 from control_machine.config import Settings
 from control_machine.factory.api import router as factory_router
+from control_machine.factory.connector import ConnectorHub
 from control_machine.factory.live_links import FactoryLiveLinks
 from control_machine.factory.store import FactoryStore
 from control_machine.web.session import router as session_router
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@127.0.0.1:5442/control_machine?sslmode=disable",
+    "postgresql://postgres:postgres@127.0.0.1:5432/control_machine?sslmode=disable",
 )
 
 
@@ -61,6 +62,7 @@ class FactoryApiTests(unittest.IsolatedAsyncioTestCase):
         app.state.factory = self.store
         app.state.factory_sessions = FactorySessions(settings)
         app.state.factory_live = FactoryLiveLinks(settings)
+        app.state.connector_hub = ConnectorHub()
         app.include_router(session_router)
         app.include_router(factory_router)
         self.client = TestClient(app)

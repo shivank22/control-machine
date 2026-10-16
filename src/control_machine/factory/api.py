@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 
 from ..access import TOOL_NAMES, computer_online, session_is_open, tool_name_ok
 from ..web.session import require_factory_session
+from .connector import ConnectorHub, ToolResult
 from .live_links import FactoryLiveError, FactoryLiveLinks, expires_datetime
 from .serialize import (
     agent_detail,
@@ -22,15 +35,23 @@ from .serialize import (
 from .store import FactoryStore, split_list_row
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 REFUSAL = (
     "I can't start machine work while the computer is offline. "
     "I'll be here when the connector dials out again."
 )
-STUB_ACK = (
+STUB_ACK_STREAM = (
     "Got it. I opened a session on this computer. "
-    "The agent loop is not wired yet — this is the platform foundation."
+    "The connector stream is live — tool calls can reach the machine. "
+    "The Deep Agent loop is not wired yet."
 )
+STUB_ACK_WAITING = (
+    "Got it. I opened a session on this computer. "
+    "Connect the outbound stream so tool calls can reach the machine. "
+    "The Deep Agent loop is not wired yet."
+)
+CONNECTOR_HEARTBEAT_SECONDS = 15.0
 
 
 class AgentCreateIn(BaseModel):
@@ -78,6 +99,13 @@ class BotIn(BaseModel):
     token: str = Field(min_length=1)
 
 
+class ToolResultIn(BaseModel):
+    id: str = Field(min_length=1)
+    ok: bool = True
+    observation: str = ""
+    error: str | None = None
+
+
 def _store(request: Request) -> FactoryStore:
     return request.app.state.factory
 
@@ -86,8 +114,33 @@ def _live(request: Request) -> FactoryLiveLinks:
     return request.app.state.factory_live
 
 
+def _hub(request: Request) -> ConnectorHub:
+    return request.app.state.connector_hub
+
+
+def _hub_ws(websocket: WebSocket) -> ConnectorHub:
+    return websocket.app.state.connector_hub
+
+
+def _store_ws(websocket: WebSocket) -> FactoryStore:
+    return websocket.app.state.factory
+
+
 def _auth(_: Any = Depends(require_factory_session)) -> None:
     return None
+
+
+async def _computer_from_bearer(request: Request) -> dict[str, Any]:
+    raw = request.headers.get("authorization", "")
+    scheme, _, token = raw.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Missing connector credential.")
+    computer = await _store(request).computer_for_credential(token.strip())
+    if computer is None:
+        raise HTTPException(
+            status_code=401, detail="Connector credential was not accepted."
+        )
+    return computer
 
 
 @router.get("/api/agents")
@@ -312,6 +365,7 @@ async def post_message(
 ) -> dict[str, Any]:
     """Compose box and pause answer. Agent replies are stubbed for now."""
     store = _store(request)
+    hub = _hub(request)
     await store.expire_stale_pauses()
     bundle = await _require_agent(request, agent_id)
     text = body.body.strip()
@@ -319,7 +373,9 @@ async def post_message(
         raise HTTPException(status_code=400, detail="Body is required.")
 
     computer = bundle["computer"]
+    computer_id = int(computer["id"])
     online = computer_online(computer.get("last_seen_at"))
+    stream_up = hub.connected(computer_id)
     open_session = bundle["session"]
     waiting = bundle["pause"]
 
@@ -363,12 +419,12 @@ async def post_message(
 
     title = text if len(text) <= 80 else text[:77] + "…"
     session = await store.create_session(
-        agent_id, int(computer["id"]), title=title
+        agent_id, computer_id, title=title
     )
     await store.add_message(
         agent_id,
         role="agent",
-        body=STUB_ACK,
+        body=STUB_ACK_STREAM if stream_up else STUB_ACK_WAITING,
         session_id=int(session["id"]),
     )
     await store.add_event(
@@ -376,6 +432,17 @@ async def post_message(
         kind="said",
         title="Opened a session",
         body=title,
+        session_id=int(session["id"]),
+    )
+    await store.add_event(
+        agent_id,
+        kind="decided",
+        title="Connector stream" if stream_up else "Waiting for connector stream",
+        body=(
+            "Tool calls can reach this computer."
+            if stream_up
+            else "Heartbeat is recent, but the outbound stream is quiet."
+        ),
         session_id=int(session["id"]),
     )
     return message_public(user_msg)
@@ -389,10 +456,15 @@ async def post_message(
 async def cancel_session(
     request: Request, agent_id: int, __: None = Depends(_auth)
 ) -> Response:
-    await _require_agent(request, agent_id)
+    bundle = await _require_agent(request, agent_id)
+    open_session = bundle["session"]
     ok = await _store(request).cancel_open_session(agent_id)
     if not ok:
         raise HTTPException(status_code=409, detail="No open session.")
+    if open_session is not None:
+        await _hub(request).cancel_session(
+            int(bundle["computer"]["id"]), int(open_session["id"])
+        )
     return Response(status_code=204)
 
 
@@ -464,20 +536,127 @@ async def unbind_bot(
 @router.post("/api/connector/heartbeat")
 async def connector_heartbeat(request: Request) -> dict[str, Any]:
     """Connector dials out. Does not use the Factory bearer."""
-    raw = request.headers.get("authorization", "")
-    scheme, _, token = raw.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise HTTPException(status_code=401, detail="Missing connector credential.")
-    store = _store(request)
-    computer = await store.computer_for_credential(token.strip())
+    computer = await _computer_from_bearer(request)
+    updated = await _apply_heartbeat(request, int(computer["id"]))
+    return {
+        "computer_id": int(updated["id"]),
+        "last_seen_at": updated["last_seen_at"].isoformat().replace("+00:00", "Z")
+        if updated.get("last_seen_at")
+        else None,
+        "stream_connected": _hub(request).connected(int(updated["id"])),
+    }
+
+
+@router.post("/api/connector/result")
+async def connector_result(request: Request, body: ToolResultIn) -> dict[str, Any]:
+    """Observation for a tool call delivered on the outbound stream."""
+    computer = await _computer_from_bearer(request)
+    try:
+        result = ToolResult.from_body(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    accepted = await _hub(request).deliver_result(int(computer["id"]), result)
+    if not accepted:
+        raise HTTPException(status_code=404, detail="Unknown tool call id.")
+    await _store(request).heartbeat(int(computer["id"]))
+    return {"id": result.id, "accepted": True}
+
+
+@router.websocket("/api/connector/stream")
+async def connector_stream(websocket: WebSocket) -> None:
+    """Outbound stream. Tool calls travel down; the connector posts results back."""
+    credential = _connector_credential_from_ws(websocket)
+    if not credential:
+        await websocket.close(code=4401)
+        return
+    store = _store_ws(websocket)
+    hub = _hub_ws(websocket)
+    computer = await store.computer_for_credential(credential)
     if computer is None:
-        raise HTTPException(status_code=401, detail="Connector credential was not accepted.")
-    updated = await store.heartbeat(int(computer["id"]))
+        await websocket.close(code=4401)
+        return
+    computer_id = int(computer["id"])
+    await websocket.accept()
+    outbound = await hub.attach(computer_id)
+    await store.heartbeat(computer_id)
+    await websocket.send_text(
+        json.dumps({"type": "hello", "computer_id": computer_id})
+    )
+
+    async def pump_outbound() -> None:
+        while True:
+            message = await outbound.get()
+            await websocket.send_text(json.dumps(message))
+
+    async def pump_heartbeat() -> None:
+        while True:
+            await asyncio.sleep(CONNECTOR_HEARTBEAT_SECONDS)
+            await store.heartbeat(computer_id)
+            await outbound.put({"type": "ping"})
+
+    sender = asyncio.create_task(pump_outbound())
+    beater = asyncio.create_task(pump_heartbeat())
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_text(
+                    json.dumps({"type": "error", "detail": "Expected JSON."})
+                )
+                continue
+            if not isinstance(payload, dict):
+                continue
+            kind = str(payload.get("type") or "")
+            if kind == "pong":
+                await store.heartbeat(computer_id)
+                continue
+            if kind == "tool_result":
+                try:
+                    result = ToolResult.from_body(payload)
+                except ValueError as exc:
+                    await websocket.send_text(
+                        json.dumps({"type": "error", "detail": str(exc)})
+                    )
+                    continue
+                accepted = await hub.deliver_result(computer_id, result)
+                if not accepted:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "detail": "Unknown tool call id.",
+                                "id": result.id,
+                            }
+                        )
+                    )
+                else:
+                    await store.heartbeat(computer_id)
+                continue
+            await websocket.send_text(
+                json.dumps({"type": "error", "detail": f"Unknown type: {kind}"})
+            )
+    except WebSocketDisconnect:
+        log.info("Connector stream closed for computer %s", computer_id)
+    finally:
+        sender.cancel()
+        beater.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await sender
+        with contextlib.suppress(asyncio.CancelledError):
+            await beater
+        await hub.detach(computer_id, outbound)
+
+
+async def _apply_heartbeat(request: Request, computer_id: int) -> dict[str, Any]:
+    store = _store(request)
+    updated = await store.heartbeat(computer_id)
     assert updated is not None
     # Apply any pause replies that arrived while offline.
     bundle_rows = await store.list_agents()
     for row in bundle_rows:
-        if int(row["c_id"]) != int(computer["id"]):
+        if int(row["c_id"]) != computer_id:
             continue
         if row.get("s_status") != "paused":
             continue
@@ -485,7 +664,6 @@ async def connector_heartbeat(request: Request) -> dict[str, Any]:
         full = await store.get_agent_bundle(agent_id)
         if full is None or full["pause"] is None or full["session"] is None:
             continue
-        # Find the latest user message after the pause with no answered_message yet.
         messages = await store.list_messages(agent_id)
         pause = full["pause"]
         if pause.get("answered_message_id"):
@@ -498,12 +676,18 @@ async def connector_heartbeat(request: Request) -> dict[str, Any]:
                             int(pause["id"]), int(msg["id"]), apply=True
                         )
                 break
-    return {
-        "computer_id": int(updated["id"]),
-        "last_seen_at": updated["last_seen_at"].isoformat().replace("+00:00", "Z")
-        if updated.get("last_seen_at")
-        else None,
-    }
+    return updated
+
+
+def _connector_credential_from_ws(websocket: WebSocket) -> str | None:
+    raw = websocket.headers.get("authorization", "")
+    scheme, _, token = raw.partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+    query = websocket.query_params.get("credential") or websocket.query_params.get("t")
+    if query and query.strip():
+        return query.strip()
+    return None
 
 
 async def _require_agent(request: Request, agent_id: int) -> dict[str, Any]:
