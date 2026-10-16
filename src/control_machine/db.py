@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS task_steps (
 
 CREATE INDEX IF NOT EXISTS task_steps_task_id_seq_idx ON task_steps (task_id, seq);
 
-CREATE TABLE IF NOT EXISTS skills (
+CREATE TABLE IF NOT EXISTS dashboard_skills (
     id            BIGSERIAL PRIMARY KEY,
     name          TEXT        NOT NULL,
     description   TEXT        NOT NULL DEFAULT '',
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS automations (
     id            BIGSERIAL PRIMARY KEY,
     name          TEXT        NOT NULL,
     description   TEXT        NOT NULL DEFAULT '',
-    skill_id      BIGINT      REFERENCES skills (id) ON DELETE SET NULL,
+    skill_id      BIGINT      REFERENCES dashboard_skills (id) ON DELETE SET NULL,
     prompt        TEXT        NOT NULL DEFAULT '',
     schedule      TEXT        NOT NULL,
     enabled       BOOLEAN     NOT NULL DEFAULT TRUE,
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS automations (
 
 CREATE INDEX IF NOT EXISTS automations_due_idx ON automations (enabled, next_run_at);
 
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS skill_id BIGINT REFERENCES skills (id) ON DELETE SET NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS skill_id BIGINT REFERENCES dashboard_skills (id) ON DELETE SET NULL;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS automation_id BIGINT REFERENCES automations (id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS telegram_threads (
@@ -139,7 +139,13 @@ class Database:
         async with pool.connection() as conn:
             await conn.execute(SCHEMA)
 
-        return cls(pool=pool, checkpointer=checkpointer, store=store, _stack=stack)
+        from .factory.store import FactoryStore
+
+        factory = await FactoryStore.setup(pool)
+
+        db = cls(pool=pool, checkpointer=checkpointer, store=store, _stack=stack)
+        db.factory = factory  # type: ignore[attr-defined]
+        return db
 
     async def close(self) -> None:
         await self._stack.aclose()
@@ -322,13 +328,15 @@ class Database:
     async def list_skills(self) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
-                "SELECT * FROM skills ORDER BY updated_at DESC, id DESC"
+                "SELECT * FROM dashboard_skills ORDER BY updated_at DESC, id DESC"
             )
             return [_row(r) for r in await cur.fetchall()]
 
     async def get_skill(self, skill_id: int) -> dict[str, Any] | None:
         async with self.pool.connection() as conn:
-            cur = await conn.execute("SELECT * FROM skills WHERE id = %s", (skill_id,))
+            cur = await conn.execute(
+                "SELECT * FROM dashboard_skills WHERE id = %s", (skill_id,)
+            )
             row = await cur.fetchone()
             return _row(row) if row else None
 
@@ -338,7 +346,7 @@ class Database:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                INSERT INTO skills (name, description, prompt)
+                INSERT INTO dashboard_skills (name, description, prompt)
                 VALUES (%s, %s, %s)
                 RETURNING *
                 """,
@@ -352,7 +360,7 @@ class Database:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                UPDATE skills
+                UPDATE dashboard_skills
                    SET name = %s, description = %s, prompt = %s, updated_at = now()
                  WHERE id = %s
                 RETURNING *
@@ -365,7 +373,7 @@ class Database:
     async def delete_skill(self, skill_id: int) -> bool:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
-                "DELETE FROM skills WHERE id = %s RETURNING id", (skill_id,)
+                "DELETE FROM dashboard_skills WHERE id = %s RETURNING id", (skill_id,)
             )
             return await cur.fetchone() is not None
 
@@ -570,23 +578,23 @@ class Database:
 
 _TASK_COLUMNS = """
 tasks.*,
-skills.name AS skill_name,
+dashboard_skills.name AS skill_name,
 automations.name AS automation_name
 """
 
 _TASK_SELECT = f"""
 SELECT {_TASK_COLUMNS}
   FROM tasks
-  LEFT JOIN skills ON skills.id = tasks.skill_id
+  LEFT JOIN dashboard_skills ON dashboard_skills.id = tasks.skill_id
   LEFT JOIN automations ON automations.id = tasks.automation_id
 """
 
 _AUTOMATION_SELECT = """
 SELECT automations.*,
-       skills.name AS skill_name,
-       skills.prompt AS skill_prompt
+       dashboard_skills.name AS skill_name,
+       dashboard_skills.prompt AS skill_prompt
   FROM automations
-  LEFT JOIN skills ON skills.id = automations.skill_id
+  LEFT JOIN dashboard_skills ON dashboard_skills.id = automations.skill_id
 """
 
 

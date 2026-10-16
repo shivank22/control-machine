@@ -5,7 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from ..access import FactorySessions, SessionError, expires_iso
+from datetime import datetime, timezone
+
+from ..access import FactorySession, FactorySessions, SessionError, expires_iso
 
 router = APIRouter()
 
@@ -51,9 +53,15 @@ async def delete_session(request: Request) -> Response:
     if scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(status_code=401, detail="Missing session.")
     try:
-        _sessions(request).revoke(token.strip())
+        session = _sessions(request).revoke(token.strip())
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    factory = getattr(request.app.state, "factory", None)
+    if factory is not None:
+        await factory.revoke_factory_jti(
+            session.jti,
+            datetime.fromtimestamp(session.expires_at, timezone.utc),
+        )
     return Response(status_code=204)
 
 

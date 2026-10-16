@@ -136,6 +136,33 @@ resume the agent by itself.
 
 Commands: `/watch` (mint a live URL on demand), `/new`, `/cancel`.
 
+## Factory (platform)
+
+The Factory is the cloud-shaped shell from [`docs/design/`](docs/design/index.md): one
+person, many agents, each with its own computer and Telegram bot. The agent loop is still
+stubbed — messages open or refuse sessions, and the connector heartbeat marks a computer
+online. Agentic browser/desktop work continues to live in the Mac dashboard below for now.
+
+```bash
+# In .env (see .env.example):
+FACTORY_ACCESS_KEY=dev-factory-key
+FACTORY_SESSION_SECRET=dev-factory-session-secret
+LIVE_LINK_SECRET=dev-live-secret
+
+uv run control-machine
+# Open http://127.0.0.1:8100/factory
+```
+
+Create an agent, copy the one-time connector credential, then:
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/connector/heartbeat \
+  -H "Authorization: Bearer <connector_credential>"
+```
+
+After a heartbeat, chat from the Factory UI opens a `running` session. Static design mocks
+remain at `/factory/mock/`.
+
 ## Dashboard
 
 The left column has three tabs:
@@ -193,3 +220,6 @@ Screenshots and images are stripped from traces. Set `LOG_LEVEL=DEBUG` for more 
 | `src/control_machine/telegram.py` | Telegram operator bot |
 | `src/control_machine/tracing.py` | Local JSONL traces and rotating error logs |
 | `src/control_machine/web/` | FastAPI + HTMX dashboard, live desktop stream |
+| `src/control_machine/factory/` | Factory schema, store, JSON API, live-link mint |
+| `research/schema.sql` | Factory table contract |
+| `docs/design/` | Factory screens, API, security, flows |
