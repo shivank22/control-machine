@@ -419,8 +419,49 @@ The credential is created with the computer, shown once, and kept on that comput
 Authorization: Bearer <connector credential>
 ```
 
-`POST /api/connector/heartbeat` writes `computers.last_seen_at`. The Factory treats the computer as online when that timestamp is within 30 seconds. While a session is open, the same write copies the timestamp onto `sessions.heartbeat_at`. Nothing else writes either column.
+`POST /api/connector/heartbeat` writes `computers.last_seen_at`. The Factory treats the computer as online when that timestamp is within 30 seconds. While a session is open, the same write copies the timestamp onto `sessions.heartbeat_at`. Nothing else writes either column. The response includes `stream_connected` so a connector can see whether its WebSocket is the live one.
 
-The connector holds an outbound stream to the Factory. A tool call the agent decided (a click, a navigation, a file read) is delivered on that stream. The connector performs it and posts the observation back. That is how a decision on the platform becomes a click. While the stream is quiet, the agent does not start or finish machine work.
+The connector holds an outbound WebSocket to the Factory:
+
+`GET wss://host/api/connector/stream`
+
+```
+Authorization: Bearer <connector credential>
+```
+
+A query `?credential=` is accepted for clients that cannot set the header. One stream per computer. A second dial replaces the first and fails any pending tool calls on the old link.
+
+Server → connector, text JSON:
+
+| `type` | Body | Meaning |
+| --- | --- | --- |
+| `hello` | `computer_id` | Stream accepted |
+| `tool_call` | `id`, `session_id`, `name`, `arguments` | Perform this call |
+| `cancel` | `session_id` | Drop in-flight work for that session |
+| `ping` | | Keepalive; reply with `pong` |
+| `error` | `detail`, optional `id` | Bad frame from the connector |
+
+Connector → server on the same socket:
+
+| `type` | Body |
+| --- | --- |
+| `pong` | after `ping` |
+| `tool_result` | `id`, `ok`, `observation` or `error` |
+
+Or post the observation on HTTP (same bearer):
+
+`POST /api/connector/result`
+
+```json
+{ "id": "tc_…", "ok": true, "observation": "ARIA snapshot…" }
+```
+
+```json
+{ "id": "tc_…", "ok": false, "error": "Chrome is not running." }
+```
+
+`201` is not used. `200` means the pending call was completed. `404` when `id` is unknown on this computer’s stream. Heartbeats from the open stream also refresh `last_seen_at` about every 15 seconds.
+
+A tool call the agent decided (a click, a navigation, a file read) is delivered on that stream. The connector performs it and posts the observation back. That is how a decision on the platform becomes a click. While the stream is quiet, the agent does not start or finish machine work. A recent heartbeat alone can open a session; tool delivery still waits for the stream.
 
 Bot setup is separate. `POST /api/agents/{agent_id}/bot` takes `{ "token": "…" }`, stores the token in the secret store, and sets `username` and `telegram_bot_id`. The response is the public bot object. `DELETE /api/agents/{agent_id}/bot` unbinds: it clears `chat_id`, `username`, and `telegram_bot_id`, and drops the token. The token is never written to `bots`.

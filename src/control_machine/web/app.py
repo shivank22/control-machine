@@ -29,6 +29,7 @@ from ..config import PROJECT_ROOT, get_settings
 from ..db import Database
 from ..events import EventBus
 from ..factory.api import router as factory_router
+from ..factory.connector import ConnectorHub
 from ..factory.live_links import FactoryLiveLinks
 from ..live import LiveSessions, open_live_session
 from ..runner import RunManager, RunnerBusy
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
         factory_sessions = FactorySessions(settings)
         factory = db.factory  # type: ignore[attr-defined]
         factory_live = FactoryLiveLinks(settings)
+        connector_hub = ConnectorHub()
         async with db.pool.connection() as conn:
             cur = await conn.execute(
                 """
@@ -113,6 +115,7 @@ def create_app() -> FastAPI:
         app.state.factory = factory
         app.state.factory_live = factory_live
         app.state.factory_sessions = factory_sessions
+        app.state.connector_hub = connector_hub
         app.state.live_http = live_http
         app.state.runner = RunManager(db=db, pool=pool, bus=bus, settings=settings)
 

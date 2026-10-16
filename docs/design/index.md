@@ -6,7 +6,7 @@ For now the computer is a Mac. In the enterprise case it is a VM, at Daytona, on
 
 This set is the Factory contract. The tables are in [`research/schema.sql`](../../research/schema.sql). It is the design we are building, not a description of the dashboard that ships today. The screen mock in [`research/index.html`](../../research/index.html) still draws several agents on one Mac; these pages are ahead of that drawing.
 
-**Building now.** The Factory JSON API and shell live under `src/control_machine/factory/` and `/factory`. Schema, session login, agents, skills, memory, activity, messages, desktop mint, and connector heartbeat are in place. The agent loop that turns a message into browser/desktop tool calls is still stubbed — open a session when the connector is online, refuse when it is not, and answer pauses in chat.
+**Building now.** The Factory JSON API and shell live under `src/control_machine/factory/` and `/factory`. Schema, session login, agents, skills, memory, activity, messages, desktop mint, connector heartbeat, and the outbound connector WebSocket (`/api/connector/stream` + `/api/connector/result`) are in place. The Deep Agent loop that decides tool calls is still stubbed — open a session when the connector is online, refuse when it is not, answer pauses in chat, and deliver calls only while the stream is connected.
 
 The picture of the same split is [Agent to computer](../agent-machine-architecture.png).
 
